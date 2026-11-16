@@ -12,7 +12,7 @@
 - [x] **T1.1:** Implementasi entitas dan DAO di `:core:database` sesuai `docs/03-data-spec.md` beserta unit test migrasi/CRUD Room.
 - [x] **T1.2:** Implementasi parser metadata `ISO 32000` (`VP`, `Measure`, `GPTS`, `Bounds`) di `:core:geopdf` + unit test menggunakan file di `sample-data/`.
 - [x] **T1.3:** Tambahkan dukungan fallback parser `OGC LGIDict` (`CTM`) di `:core:geopdf` + unit test.
-- [ ] **T1.4:** Implementasi *tile renderer* PDF + LRU/disk cache di `:core:geopdf` untuk mencegah OOM pada peta berukuran besar.
+- [x] **T1.4:** Implementasi *tile renderer* PDF + LRU/disk cache di `:core:geopdf` untuk mencegah OOM pada peta berukuran besar.
 
 ## Phase 2: Lokasi, Kompas & Map Viewer
 - [ ] **T2.1:** Implementasi `:core:location` (`FusedLocationProviderClient` Flow, *azimuth* kompas, dan konverter `WGS84 <-> UTM` + unit test akurasi UTM).
