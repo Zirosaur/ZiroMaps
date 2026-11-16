@@ -8,15 +8,16 @@ Seluruh modul wajib menggunakan versi dan pustaka berikut (perubahan versi mayor
 
 | Lapisan | Teknologi / Library | Catatan Penggunaan |
 | :--- | :--- | :--- |
-| Bahasa & Async | Kotlin + Coroutines + Flow | *Structured concurrency* untuk I/O PDF & lokasi |
-| UI Framework | Jetpack Compose + Material 3 | Single-Activity architecture dengan Compose Navigation |
-| Dependency Injection | Hilt (Dagger) | Mengikat implementasi antarmodul `:core:*` |
-| GeoPDF Parsing | `PdfBox-Android` (Apache 2.0) | Membaca dictionary `VP`, `Measure`, `GPTS`, dan `LGIDict` |
+| Build System & Tooling | AGP `9.5.0` + Gradle `9.7.1` + KSP `2.3.14` | Kompilasi Kotlin terintegrasi native di AGP 9 |
+| Bahasa & Async | Kotlin `2.4.21` + Coroutines `1.9.0` + Flow | *Structured concurrency* untuk I/O PDF & lokasi |
+| UI Framework | Jetpack Compose (BOM `2024.09.00`) + Material 3 | Single-Activity architecture dengan Compose Navigation (`2.8.4`) |
+| Dependency Injection | Hilt `2.60.1` (via KSP) | Mengikat implementasi antarmodul `:core:*` |
+| GeoPDF Parsing | `PdfBox-Android` `2.0.27.0` (Apache 2.0) | Membaca dictionary `VP`, `Measure`, `GPTS`, dan `LGIDict` |
 | PDF Tile Rendering | `PdfRenderer` / `Pdfium` + Disk/LRU Tile Cache | Merender bagian peta ke *bitmap tiles* agar bebas OOM |
-| Kamera & EXIF | AndroidX `CameraX` + `ExifInterface` | *Preview*, *ImageCapture*, dan penulisan metadata GPS |
-| Lokasi & Sensor | `FusedLocationProviderClient` + `SensorManager` | Koordinat GPS + *Rotation Vector* untuk *azimuth* |
-| Database Lokal | AndroidX `Room` (SQLite) | Menyimpan metadata proyek, *waypoint*, *track*, dan relasi foto |
-| Unit & UI Test | JUnit5 / MockK / Turbine / Compose Test | Pengujian logika parser, konversi koordinat, dan ViewModel |
+| Kamera & EXIF | AndroidX `CameraX` `1.4.1` + `ExifInterface` `1.3.7` | *Preview*, *ImageCapture*, dan penulisan metadata GPS |
+| Lokasi & Sensor | `FusedLocationProviderClient` (`21.3.0`) + `SensorManager` | Koordinat GPS + *Rotation Vector* untuk *azimuth* |
+| Database Lokal | AndroidX `Room` `2.8.5` (SQLite via KSP) | Menyimpan metadata proyek, *waypoint*, *track*, dan relasi foto |
+| Unit & UI Test | JUnit `4.13.2` / MockK `1.13.13` / Turbine `1.2.0` / Compose Test | Pengujian logika parser, konversi koordinat, dan ViewModel |
 
 ---
 

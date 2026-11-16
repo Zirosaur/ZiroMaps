@@ -6,7 +6,7 @@
 
 ## Phase 0: Setup Fondasi Proyek
 - [x] **T0.1:** Inisialisasi proyek Android (Kotlin, Compose, Material 3, Hilt) dengan struktur multi-modul (`:app`, `:core:geopdf`, `:core:location`, `:core:camera`, `:core:database`, `:core:export`).
-- [ ] **T0.2:** Konfigurasi `libs.versions.toml` sesuai versi terkunci di `docs/02-architecture.md` dan pastikan `./gradlew assembleDebug` sukses.
+- [x] **T0.2:** Konfigurasi `libs.versions.toml` sesuai versi terkunci di `docs/02-architecture.md` dan pastikan `./gradlew assembleDebug` sukses.
 
 ## Phase 1: Core GeoPDF & Penyimpanan Lokal
 - [ ] **T1.1:** Implementasi entitas dan DAO di `:core:database` sesuai `docs/03-data-spec.md` beserta unit test migrasi/CRUD Room.
