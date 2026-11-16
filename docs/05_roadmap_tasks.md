@@ -15,7 +15,7 @@
 - [x] **T1.4:** Implementasi *tile renderer* PDF + LRU/disk cache di `:core:geopdf` untuk mencegah OOM pada peta berukuran besar.
 
 ## Phase 2: Lokasi, Kompas & Map Viewer
-- [ ] **T2.1:** Implementasi `:core:location` (`FusedLocationProviderClient` Flow, *azimuth* kompas, dan konverter `WGS84 <-> UTM` + unit test akurasi UTM).
+- [x] **T2.1:** Implementasi `:core:location` (`FusedLocationProviderClient` Flow, *azimuth* kompas, dan konverter `WGS84 <-> UTM` + unit test akurasi UTM).
 - [ ] **T2.2:** Bangun `MapLibraryScreen` dengan alur impor SAF dan validasi GeoPDF.
 - [ ] **T2.3:** Bangun `MapViewerScreen` (kanvas *pan/zoom* tile PDF + *blue dot* GPS *real-time* + panel koordinat WGS84/UTM).
 - [ ] **T2.4:** Implementasi fitur tambah *Waypoint* manual, *WaypointDetailSheet*, dan perekaman *Track* (termasuk *Foreground Service*).
