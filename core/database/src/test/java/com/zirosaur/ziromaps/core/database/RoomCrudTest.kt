@@ -259,4 +259,94 @@ class RoomCrudTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun getAllProjectSummariesAggregation() = runTest {
+        val project1 = MapProjectEntity(
+            id = "proj-1",
+            name = "Project 1",
+            pdfLocalPath = "/path/1.pdf",
+            pageWidthPt = 595.0,
+            pageHeightPt = 842.0,
+            geoStandard = "ISO_32000",
+            epsgCode = 4326,
+            transformMatrixJson = "{}",
+            createdAtEpochMs = 1000L
+        )
+        val project2 = MapProjectEntity(
+            id = "proj-2",
+            name = "Project 2",
+            pdfLocalPath = "/path/2.pdf",
+            pageWidthPt = 595.0,
+            pageHeightPt = 842.0,
+            geoStandard = "OGC_LGIDICT",
+            epsgCode = 32749,
+            transformMatrixJson = "{}",
+            createdAtEpochMs = 2000L
+        )
+        projectDao.insert(project1)
+        projectDao.insert(project2)
+
+        val wp1 = WaypointEntity(
+            id = "wp-1",
+            projectId = "proj-1",
+            title = "WP 1",
+            note = "",
+            latitude = -7.1,
+            longitude = 109.1,
+            altitudeM = 10.0,
+            accuracyM = 5f,
+            hasPhoto = true,
+            createdAtEpochMs = 1100L
+        )
+        val wp2 = WaypointEntity(
+            id = "wp-2",
+            projectId = "proj-1",
+            title = "WP 2",
+            note = "",
+            latitude = -7.2,
+            longitude = 109.2,
+            altitudeM = 12.0,
+            accuracyM = 4f,
+            hasPhoto = false,
+            createdAtEpochMs = 1200L
+        )
+        waypointDao.insert(wp1)
+        waypointDao.insert(wp2)
+
+        val photo1 = PhotoRecordEntity(
+            id = "photo-1",
+            waypointId = "wp-1",
+            filePath = "/path/photo1.jpg",
+            azimuthDeg = 90f,
+            capturedAtEpochMs = 1150L
+        )
+        val photo2 = PhotoRecordEntity(
+            id = "photo-2",
+            waypointId = "wp-1",
+            filePath = "/path/photo2.jpg",
+            azimuthDeg = 180f,
+            capturedAtEpochMs = 1160L
+        )
+        photoDao.insert(photo1)
+        photoDao.insert(photo2)
+
+        projectDao.getAllProjectSummaries().test {
+            val summaries = awaitItem()
+            assertEquals(2, summaries.size)
+            // Ordered by createdAtEpochMs DESC -> proj-2 then proj-1
+            val summaryProj2 = summaries[0]
+            val summaryProj1 = summaries[1]
+
+            assertEquals("proj-2", summaryProj2.project.id)
+            assertEquals(0, summaryProj2.waypointCount)
+            assertEquals(0, summaryProj2.photoCount)
+
+            assertEquals("proj-1", summaryProj1.project.id)
+            assertEquals(2, summaryProj1.waypointCount)
+            assertEquals(2, summaryProj1.photoCount)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

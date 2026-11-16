@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.zirosaur.ziromaps.core.database.entity.MapProjectEntity
+import com.zirosaur.ziromaps.core.database.model.MapProjectSummary
 import com.zirosaur.ziromaps.core.database.model.MapProjectWithWaypoints
 import kotlinx.coroutines.flow.Flow
 
@@ -37,6 +38,19 @@ interface MapProjectDao {
 
     @Query("SELECT * FROM map_projects ORDER BY createdAtEpochMs DESC")
     fun getAllProjects(): Flow<List<MapProjectEntity>>
+
+    @Query("""
+        SELECT 
+            p.*,
+            COUNT(DISTINCT w.id) AS waypointCount,
+            COUNT(DISTINCT ph.id) AS photoCount
+        FROM map_projects p
+        LEFT JOIN waypoints w ON w.projectId = p.id
+        LEFT JOIN photo_records ph ON ph.waypointId = w.id
+        GROUP BY p.id
+        ORDER BY p.createdAtEpochMs DESC
+    """)
+    fun getAllProjectSummaries(): Flow<List<MapProjectSummary>>
 
     @Transaction
     @Query("SELECT * FROM map_projects WHERE id = :id")

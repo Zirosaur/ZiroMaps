@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Ziro Maps</string>
+    <string name="map_library_title">Perpustakaan Peta</string>
+    <string name="import_geopdf">Impor GeoPDF</string>
+    <string name="empty_maps_title">Belum Ada Peta GeoPDF</string>
+    <string name="empty_maps_desc">Impor file peta berformat GeoPDF (.pdf) dari penyimpanan perangkat untuk memulai pemetaan offline tanpa sinyal.</string>
+    <string name="import_now">Impor Peta Sekarang</string>
+    <string name="loading_import">Menyalin dan memvalidasi file GeoPDF…</string>
+    <string name="not_geopdf_title">Bukan File GeoPDF</string>
+    <string name="not_geopdf_message">File PDF yang dipilih tidak memiliki metadata georeferensi yang valid (ISO 32000 atau OGC GeoPDF). Versi saat ini belum mendukung georeferencing manual.</string>
+    <string name="ok_button">Mengerti</string>
+    <string name="delete_map_title">Hapus Peta?</string>
+    <string name="delete_map_confirm_format">Apakah Anda yakin ingin menghapus peta \"%1$s\"? Seluruh data waypoint dan foto terkait peta ini akan dihapus secara permanen.</string>
+    <string name="cancel_button">Batal</string>
+    <string name="delete_button">Hapus</string>
+    <string name="waypoint_count_format">%1$d Waypoint</string>
+    <string name="photo_count_format">%1$d Foto</string>
+    <string name="import_success">Peta berhasil diimpor.</string>
+</resources>
