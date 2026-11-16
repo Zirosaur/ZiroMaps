@@ -1,6 +1,8 @@
 package com.zirosaur.ziromaps.ui.viewer
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.test.core.app.ApplicationProvider
+import android.content.Context
 import app.cash.turbine.test
 import com.zirosaur.ziromaps.core.database.dao.MapProjectDao
 import com.zirosaur.ziromaps.core.database.dao.TrackDao
@@ -10,6 +12,8 @@ import com.zirosaur.ziromaps.core.database.entity.TrackEntity
 import com.zirosaur.ziromaps.core.database.entity.WaypointEntity
 import com.zirosaur.ziromaps.core.database.model.TrackWithPoints
 import com.zirosaur.ziromaps.core.database.model.WaypointWithPhotos
+import com.zirosaur.ziromaps.core.export.ExportManager
+import com.zirosaur.ziromaps.core.export.model.ExportFormat
 import com.zirosaur.ziromaps.core.geopdf.model.LatLon
 import com.zirosaur.ziromaps.core.geopdf.model.PagePoint
 import com.zirosaur.ziromaps.core.geopdf.model.TransformMatrix
@@ -42,6 +46,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
+import java.io.IOException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -56,6 +62,7 @@ class MapViewerViewModelTest {
     private val compassProvider = mockk<CompassProvider>()
     private val tileRenderer = mockk<PdfTileRenderer>()
     private val trackRecordingManager = TrackRecordingManager()
+    private val exportManager = mockk<ExportManager>()
 
     private val projectFlow = MutableStateFlow<MapProjectEntity?>(null)
     private val waypointsFlow = MutableStateFlow<List<WaypointWithPhotos>>(emptyList())
@@ -119,6 +126,7 @@ class MapViewerViewModelTest {
             locationProvider = locationProvider,
             compassProvider = compassProvider,
             trackRecordingManager = trackRecordingManager,
+            exportManager = exportManager,
             tileRenderer = tileRenderer
         )
     }
@@ -351,5 +359,65 @@ class MapViewerViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isRecordingTrack)
+    }
+
+    @Test
+    fun exportDialogVisibilityCanBeToggled() = runTest(testDispatcher) {
+        val viewModel = createViewModel()
+        assertFalse(viewModel.uiState.value.showExportDialog)
+
+        viewModel.openExportDialog()
+        assertTrue(viewModel.uiState.value.showExportDialog)
+
+        viewModel.dismissExportDialog()
+        assertFalse(viewModel.uiState.value.showExportDialog)
+    }
+
+    @Test
+    fun exportProject_success_triggersExportAndDismissesDialog() = runTest(testDispatcher) {
+        val viewModel = createViewModel()
+        projectFlow.value = testProject
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val exportsDir = File(context.cacheDir, "exports").apply { mkdirs() }
+        val dummyFile = File(exportsDir, "Central_Java_Map_export.kmz").apply { writeText("dummy content") }
+        coEvery { exportManager.exportProject("test-map-123", ExportFormat.KMZ, any()) } returns Result.success(dummyFile)
+
+        viewModel.openExportDialog()
+        assertTrue(viewModel.uiState.value.showExportDialog)
+
+        var callbackFile: File? = null
+        var callbackFormat: ExportFormat? = null
+        viewModel.exportProject(ExportFormat.KMZ, context) { file, format ->
+            callbackFile = file
+            callbackFormat = format
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify { exportManager.exportProject("test-map-123", ExportFormat.KMZ, any()) }
+        assertFalse(viewModel.uiState.value.isExporting)
+        assertFalse(viewModel.uiState.value.showExportDialog)
+        assertEquals("Central_Java_Map_export.kmz", callbackFile?.name)
+        assertEquals(ExportFormat.KMZ, callbackFormat)
+        assertTrue(viewModel.uiState.value.userNotice?.contains("Central_Java_Map_export.kmz") == true)
+    }
+
+    @Test
+    fun exportProject_failure_updatesUserNotice() = runTest(testDispatcher) {
+        val viewModel = createViewModel()
+        projectFlow.value = testProject
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val context: Context = ApplicationProvider.getApplicationContext()
+        coEvery {
+            exportManager.exportProject("test-map-123", ExportFormat.GEOJSON, any())
+        } returns Result.failure(IOException("No space left on device"))
+
+        viewModel.exportProject(ExportFormat.GEOJSON, context)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isExporting)
+        assertTrue(viewModel.uiState.value.userNotice?.contains("No space left on device") == true)
     }
 }

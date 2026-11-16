@@ -1,16 +1,21 @@
 package com.zirosaur.ziromaps.ui.viewer
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
+import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zirosaur.ziromaps.R
 import com.zirosaur.ziromaps.core.database.dao.MapProjectDao
 import com.zirosaur.ziromaps.core.database.dao.TrackDao
 import com.zirosaur.ziromaps.core.database.dao.WaypointDao
 import com.zirosaur.ziromaps.core.database.entity.MapProjectEntity
 import com.zirosaur.ziromaps.core.database.entity.WaypointEntity
 import com.zirosaur.ziromaps.core.database.model.WaypointWithPhotos
+import com.zirosaur.ziromaps.core.export.ExportManager
+import com.zirosaur.ziromaps.core.export.model.ExportFormat
 import com.zirosaur.ziromaps.core.geopdf.model.LatLon
 import com.zirosaur.ziromaps.core.geopdf.model.PagePoint
 import com.zirosaur.ziromaps.core.geopdf.model.TransformMatrix
@@ -44,6 +49,7 @@ class MapViewerViewModel @Inject constructor(
     private val locationProvider: LocationProvider,
     private val compassProvider: CompassProvider,
     private val trackRecordingManager: TrackRecordingManager,
+    private val exportManager: ExportManager,
     val tileRenderer: PdfTileRenderer
 ) : ViewModel() {
 
@@ -314,6 +320,79 @@ class MapViewerViewModel @Inject constructor(
 
     fun dismissUserNotice() {
         _uiState.update { it.copy(userNotice = null) }
+    }
+
+    fun openExportDialog() {
+        _uiState.update { it.copy(showExportDialog = true) }
+    }
+
+    fun dismissExportDialog() {
+        if (!_uiState.value.isExporting) {
+            _uiState.update { it.copy(showExportDialog = false) }
+        }
+    }
+
+    fun exportProject(
+        format: ExportFormat,
+        context: Context,
+        onFileReadyToShare: ((File, ExportFormat) -> Unit)? = null
+    ) {
+        val project = _uiState.value.mapProject ?: return
+        _uiState.update { it.copy(isExporting = true) }
+        viewModelScope.launch {
+            val destinationDir = File(context.cacheDir, "exports").apply { mkdirs() }
+            val result = exportManager.exportProject(project.id, format, destinationDir)
+            result.fold(
+                onSuccess = { file ->
+                    _uiState.update {
+                        it.copy(
+                            isExporting = false,
+                            showExportDialog = false,
+                            userNotice = "File ${file.name} siap dibagikan."
+                        )
+                    }
+                    if (onFileReadyToShare != null) {
+                        onFileReadyToShare(file, format)
+                    } else {
+                        shareExportedFile(context, file, format)
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isExporting = false,
+                            userNotice = "Gagal mengekspor data: ${error.localizedMessage ?: "Terjadi kesalahan"}"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun shareExportedFile(context: Context, file: File, format: ExportFormat) {
+        try {
+            val authority = "${context.packageName}.fileprovider"
+            val contentUri = FileProvider.getUriForFile(context, authority, file)
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = format.mimeType
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                putExtra(Intent.EXTRA_SUBJECT, "Ekspor Data Peta: ${file.name}")
+                putExtra(
+                    Intent.EXTRA_TEXT,
+                    "Berikut file ekspor data proyek peta \"${_uiState.value.mapProject?.name ?: file.name}\" dari Ziro Maps."
+                )
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooserTitle = "Bagikan Proyek Peta (${format.displayName})"
+            val chooser = Intent.createChooser(sendIntent, chooserTitle).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(userNotice = "File ${file.name} siap, namun gagal membuka Share Sheet: ${e.localizedMessage}")
+            }
+        }
     }
 
     suspend fun renderTile(tile: MapTile): Bitmap? {

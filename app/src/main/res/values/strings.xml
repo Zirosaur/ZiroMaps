@@ -56,4 +56,17 @@
     <string name="accuracy_warning">Akurasi Rendah</string>
     <string name="gps_not_fixed_warning">Mencari GPS…</string>
     <string name="open_settings">Buka Pengaturan</string>
+    <string name="export_project_title">Ekspor Proyek Peta</string>
+    <string name="export_format_label">Pilih Format Ekspor</string>
+    <string name="export_geojson_desc">Format standar SIG vektor (RFC 7946) untuk QGIS, ArcGIS, dan Web GIS.</string>
+    <string name="export_kmz_desc">Format arsip kompresi Google Earth berisi KML dan seluruh foto lapangan.</string>
+    <string name="export_csv_desc">Format tabel atribut koordinat &amp; catatan (RFC 4180) untuk spreadsheet.</string>
+    <string name="export_action_button">Ekspor &amp; Bagikan</string>
+    <string name="exporting_in_progress">Menyiapkan file ekspor…</string>
+    <string name="export_share_chooser_title">Bagikan Proyek Peta</string>
+    <string name="export_share_subject">Ekspor Data Peta: %1$s</string>
+    <string name="export_share_text">Berikut file ekspor data proyek peta \"%1$s\" dari Ziro Maps.</string>
+    <string name="export_success_notice">File %1$s siap dibagikan.</string>
+    <string name="export_failed_notice">Gagal mengekspor data: %1$s</string>
+    <string name="export_button_desc">Ekspor &amp; Bagikan Peta</string>
 </resources>

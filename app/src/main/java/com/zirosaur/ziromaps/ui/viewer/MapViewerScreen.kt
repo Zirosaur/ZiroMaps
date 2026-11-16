@@ -34,12 +34,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.zirosaur.ziromaps.R
 import com.zirosaur.ziromaps.ui.viewer.components.AddWaypointDialog
 import com.zirosaur.ziromaps.ui.viewer.components.CoordinateStatusBar
+import com.zirosaur.ziromaps.ui.viewer.components.ExportDialog
 import com.zirosaur.ziromaps.ui.viewer.components.MapCanvas
 import com.zirosaur.ziromaps.ui.viewer.components.MapViewerBottomBar
 import com.zirosaur.ziromaps.ui.viewer.components.WaypointDetailSheet
@@ -171,6 +175,26 @@ fun MapViewerScreen(
                         onToggleFormat = { viewModel.toggleCoordinateFormat() },
                         modifier = Modifier.weight(1f)
                     )
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        IconButton(
+                            onClick = { viewModel.openExportDialog() },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_share),
+                                contentDescription = stringResource(id = R.string.export_button_desc),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
 
                 // Bottom Action Buttons Overlay
@@ -209,6 +233,18 @@ fun MapViewerScreen(
                         onDelete = { wpId ->
                             viewModel.deleteWaypoint(wpId)
                         }
+                    )
+                }
+
+                // Export Dialog
+                if (uiState.showExportDialog) {
+                    ExportDialog(
+                        projectName = project.name,
+                        waypointCount = uiState.waypoints.size,
+                        trackCount = uiState.tracks.size,
+                        isExporting = uiState.isExporting,
+                        onDismiss = { viewModel.dismissExportDialog() },
+                        onExport = { format -> viewModel.exportProject(format, context) }
                     )
                 }
             } else if (uiState.isLoading) {

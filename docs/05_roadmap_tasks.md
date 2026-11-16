@@ -27,4 +27,4 @@
 
 ## Phase 4: Ekspor & Uji Lapangan
 - [x] **T4.1:** Implementasi `:core:export` untuk menghasilkan file **GeoJSON**, **CSV**, dan **KMZ** (beserta foto) + unit test format output.
-- [ ] **T4.2:** Integrasikan `ExportDialog` dengan *Android Share Sheet* dan lakukan uji coba lapangan menyeluruh (*offline mode*).
+- [x] **T4.2:** Integrasikan `ExportDialog` dengan *Android Share Sheet* dan lakukan uji coba lapangan menyeluruh (*offline mode*).

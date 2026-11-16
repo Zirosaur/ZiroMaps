@@ -30,6 +30,8 @@ data class MapViewerUiState(
     val isRecordingTrack: Boolean = false,
     val recordedDistanceM: Double = 0.0,
     val showAddWaypointDialog: Boolean = false,
+    val showExportDialog: Boolean = false,
+    val isExporting: Boolean = false,
     val selectedWaypoint: WaypointWithPhotos? = null,
     val mapCenterLatLon: LatLon? = null,
     val errorMessage: String? = null,
