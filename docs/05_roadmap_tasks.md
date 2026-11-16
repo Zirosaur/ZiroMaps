@@ -9,7 +9,7 @@
 - [x] **T0.2:** Konfigurasi `libs.versions.toml` sesuai versi terkunci di `docs/02-architecture.md` dan pastikan `./gradlew assembleDebug` sukses.
 
 ## Phase 1: Core GeoPDF & Penyimpanan Lokal
-- [ ] **T1.1:** Implementasi entitas dan DAO di `:core:database` sesuai `docs/03-data-spec.md` beserta unit test migrasi/CRUD Room.
+- [x] **T1.1:** Implementasi entitas dan DAO di `:core:database` sesuai `docs/03-data-spec.md` beserta unit test migrasi/CRUD Room.
 - [ ] **T1.2:** Implementasi parser metadata `ISO 32000` (`VP`, `Measure`, `GPTS`, `Bounds`) di `:core:geopdf` + unit test menggunakan file di `sample-data/`.
 - [ ] **T1.3:** Tambahkan dukungan fallback parser `OGC LGIDict` (`CTM`) di `:core:geopdf` + unit test.
 - [ ] **T1.4:** Implementasi *tile renderer* PDF + LRU/disk cache di `:core:geopdf` untuk mencegah OOM pada peta berukuran besar.
