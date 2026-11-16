@@ -28,3 +28,6 @@
 ## Phase 4: Ekspor & Uji Lapangan
 - [x] **T4.1:** Implementasi `:core:export` untuk menghasilkan file **GeoJSON**, **CSV**, dan **KMZ** (beserta foto) + unit test format output.
 - [x] **T4.2:** Integrasikan `ExportDialog` dengan *Android Share Sheet* dan lakukan uji coba lapangan menyeluruh (*offline mode*).
+
+## Phase 5: Local Signing & Release Hardening
+- [x] **T5.1:** Konfigurasi local release signing, proguard hardening, penanganan WindowInsets edge-to-edge, dan script build lokal (`scripts/release-local.sh`).

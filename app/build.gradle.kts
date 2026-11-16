@@ -19,9 +19,46 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val keystorePath: String? = providers.gradleProperty("ZMAP_KEYSTORE_PATH")
+        .orElse(providers.environmentVariable("ZMAP_KEYSTORE_PATH"))
+        .orNull
+    val keystorePass: String? = providers.gradleProperty("ZMAP_KEYSTORE_PASS")
+        .orElse(providers.environmentVariable("ZMAP_KEYSTORE_PASS"))
+        .orNull
+    val releaseKeyAlias: String? = providers.gradleProperty("ZMAP_KEY_ALIAS")
+        .orElse(providers.environmentVariable("ZMAP_KEY_ALIAS"))
+        .orNull
+    val releaseKeyPass: String? = providers.gradleProperty("ZMAP_KEY_PASS")
+        .orElse(providers.environmentVariable("ZMAP_KEY_PASS"))
+        .orNull
+
+    signingConfigs {
+        create("release") {
+            val ksFile: java.io.File? = keystorePath?.let { file(it) }
+            if (ksFile != null &&
+                ksFile.exists() &&
+                !keystorePass.isNullOrBlank() &&
+                !releaseKeyAlias.isNullOrBlank() &&
+                !releaseKeyPass.isNullOrBlank()
+            ) {
+                storeFile = ksFile
+                storePassword = keystorePass
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPass
+            } else {
+                val debugConfig = getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -12,3 +12,11 @@
 build/
 */build/
 */*/build/
+
+# Keystores & Signing
+*.jks
+*.keystore
+
+# Local distribution directory
+dist/
+

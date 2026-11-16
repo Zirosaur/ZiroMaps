@@ -8,11 +8,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -111,12 +115,11 @@ fun MapViewerScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-    ) { paddingValues ->
+    ) { _ ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier = Modifier.fillMaxSize()
         ) {
             val project = uiState.mapProject
 
@@ -143,6 +146,7 @@ fun MapViewerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
                         .padding(top = 16.dp, start = 12.dp, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -205,7 +209,9 @@ fun MapViewerScreen(
                     onAddPinClick = { viewModel.openAddWaypointDialog() },
                     onRecordTrackClick = { viewModel.toggleTrackRecording(context) },
                     onCameraStampClick = { onOpenCameraStamp(projectId) },
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
                 )
 
                 // Add Waypoint Dialog
@@ -250,7 +256,9 @@ fun MapViewerScreen(
             } else if (uiState.isLoading) {
                 // Loading state
                 Column(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .safeDrawingPadding(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -264,7 +272,9 @@ fun MapViewerScreen(
             } else {
                 // Error state
                 Column(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .safeDrawingPadding(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
