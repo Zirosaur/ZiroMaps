@@ -26,4 +26,25 @@
     <string name="permission_location_rationale">Izin lokasi diperlukan untuk menampilkan posisi GPS Anda di atas peta.</string>
     <string name="grant_permission">Izinkan Lokasi</string>
     <string name="feature_coming_soon">Fitur ini tersedia pada fase berikutnya.</string>
+    <string name="add_waypoint_title">Tambah Waypoint</string>
+    <string name="edit_waypoint_title">Edit Waypoint</string>
+    <string name="waypoint_name_label">Nama Titik</string>
+    <string name="waypoint_note_label">Catatan Lapangan</string>
+    <string name="waypoint_saved">Waypoint berhasil disimpan.</string>
+    <string name="waypoint_updated">Waypoint berhasil diperbarui.</string>
+    <string name="waypoint_deleted">Waypoint telah dihapus.</string>
+    <string name="delete_waypoint_title">Hapus Waypoint?</string>
+    <string name="delete_waypoint_confirm">Apakah Anda yakin ingin menghapus titik waypoint ini beserta fotonya?</string>
+    <string name="save_button">Simpan</string>
+    <string name="use_gps_position">Gunakan Posisi GPS</string>
+    <string name="use_map_center">Gunakan Tengah Peta</string>
+    <string name="recording_track_title">Merekam Jalur GPS…</string>
+    <string name="start_track">Mulai Rekam Track</string>
+    <string name="stop_track">Hentikan Track</string>
+    <string name="track_started">Perekaman track dimulai.</string>
+    <string name="track_stopped">Perekaman track dihentikan.</string>
+    <string name="track_name_prompt">Nama Jalur Track</string>
+    <string name="track_notification_channel">Perekaman Track GPS</string>
+    <string name="track_notification_desc">Notifikasi aktif saat perekaman jejak GPS berjalan di background.</string>
+    <string name="track_status_format">Jarak: %1$.2f km | Titik: %2$d</string>
 </resources>

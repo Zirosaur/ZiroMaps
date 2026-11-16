@@ -12,9 +12,11 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -22,6 +24,8 @@ import com.zirosaur.ziromaps.R
 
 @Composable
 fun MapViewerBottomBar(
+    isRecordingTrack: Boolean,
+    recordedDistanceM: Double,
     onCenterGpsClick: () -> Unit,
     onAddPinClick: () -> Unit,
     onRecordTrackClick: () -> Unit,
@@ -69,17 +73,33 @@ fun MapViewerBottomBar(
             }
 
             // Record Track button
+            val trackContainerColor = if (isRecordingTrack) Color(0xFFC62828) else MaterialTheme.colorScheme.surface
+            val trackContentColor = if (isRecordingTrack) Color.White else MaterialTheme.colorScheme.onSurface
+
             SmallFloatingActionButton(
                 onClick = onRecordTrackClick,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
+                containerColor = trackContainerColor,
+                contentColor = trackContentColor,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_track),
-                    contentDescription = stringResource(id = R.string.record_track),
-                    modifier = Modifier.size(20.dp)
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_track),
+                        contentDescription = if (isRecordingTrack) stringResource(id = R.string.stop_track) else stringResource(id = R.string.record_track),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    if (isRecordingTrack) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = String.format(java.util.Locale.US, "%.1f km", recordedDistanceM / 1000.0),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White
+                        )
+                    }
+                }
             }
         }
 

@@ -22,14 +22,21 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.zirosaur.ziromaps.core.database.model.TrackWithPoints
+import com.zirosaur.ziromaps.core.database.model.WaypointWithPhotos
+import com.zirosaur.ziromaps.core.geopdf.model.LatLon
 import com.zirosaur.ziromaps.core.geopdf.model.PagePoint
+import com.zirosaur.ziromaps.core.geopdf.model.TransformMatrix
 import com.zirosaur.ziromaps.core.geopdf.tile.MapTile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,16 +46,22 @@ import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 @Composable
 fun MapCanvas(
     mapId: String,
     pageWidthPt: Double,
     pageHeightPt: Double,
+    transformMatrix: TransformMatrix?,
     userPagePoint: PagePoint?,
     userAccuracyM: Float?,
     userAzimuthDeg: Float?,
     centerGpsTrigger: Long,
+    waypoints: List<WaypointWithPhotos> = emptyList(),
+    tracks: List<TrackWithPoints> = emptyList(),
+    onWaypointClick: (WaypointWithPhotos) -> Unit = {},
+    onMapCenterChanged: (LatLon?) -> Unit = {},
     loadTileBitmap: suspend (MapTile) -> Bitmap?,
     modifier: Modifier = Modifier
 ) {
@@ -56,6 +69,8 @@ fun MapCanvas(
     var offset by remember { mutableStateOf(Offset.Zero) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var isInitialCentered by remember { mutableStateOf(false) }
+
+    val density = LocalDensity.current
 
     // Memory cache of loaded bitmaps for immediate rendering
     val tilesMap = remember { mutableStateMapOf<String, Bitmap>() }
@@ -73,6 +88,16 @@ fun MapCanvas(
         }
     }
 
+    // Update map center coordinate
+    LaunchedEffect(offset, scale, viewportSize, transformMatrix) {
+        if (viewportSize.width > 0 && viewportSize.height > 0 && transformMatrix != null) {
+            val centerPtX = (viewportSize.width / 2f - offset.x) / scale
+            val centerPtY = (viewportSize.height / 2f - offset.y) / scale
+            val centerLatLon = transformMatrix.toLatLon(centerPtX.toDouble(), centerPtY.toDouble())
+            onMapCenterChanged(centerLatLon)
+        }
+    }
+
     // React to Center GPS trigger
     LaunchedEffect(centerGpsTrigger) {
         if (centerGpsTrigger > 0L && userPagePoint != null && viewportSize.width > 0) {
@@ -83,7 +108,6 @@ fun MapCanvas(
     }
 
     // Determine current zoom level for tile pyramid
-    // Zoom 0 = 0.25x, Zoom 1 = 0.5x, Zoom 2 = 1.0x, Zoom 3 = 2.0x, Zoom 4 = 4.0x, Zoom 5 = 8.0x
     val zoomLevel = remember(scale) {
         val calculated = floor(ln(scale.toDouble() / 0.25) / ln(2.0)).toInt()
         calculated.coerceIn(0, 5)
@@ -155,13 +179,29 @@ fun MapCanvas(
                     scale = newScale
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(waypoints, transformMatrix, scale, offset) {
                 detectTapGestures(
                     onDoubleTap = { tapOffset ->
                         val newScale = (scale * 2.0f).coerceIn(0.1f, 10.0f)
                         val factor = newScale / scale
                         offset = (offset - tapOffset) * factor + tapOffset
                         scale = newScale
+                    },
+                    onTap = { tapOffset ->
+                        // Check if tap hit any waypoint pin (radius ~28 dp)
+                        if (transformMatrix != null) {
+                            val hitRadiusPx = with(density) { 28.dp.toPx() }
+                            for (item in waypoints) {
+                                val pt = transformMatrix.toPagePoint(item.waypoint.latitude, item.waypoint.longitude)
+                                val pinX = (pt.xPt.toFloat() * scale) + offset.x
+                                val pinY = (pt.yPt.toFloat() * scale) + offset.y
+                                val dist = sqrt((tapOffset.x - pinX) * (tapOffset.x - pinX) + (tapOffset.y - pinY) * (tapOffset.y - pinY))
+                                if (dist <= hitRadiusPx) {
+                                    onWaypointClick(item)
+                                    return@detectTapGestures
+                                }
+                            }
+                        }
                     }
                 )
             }
@@ -181,7 +221,6 @@ fun MapCanvas(
                         dstSize = IntSize(tileDimension.roundToInt(), tileDimension.roundToInt())
                     )
                 } else {
-                    // Placeholder background for pending tile
                     drawRect(
                         color = Color.White,
                         topLeft = Offset(tileLeft, tileTop),
@@ -198,15 +237,79 @@ fun MapCanvas(
                 style = Stroke(width = 1.dp.toPx())
             )
 
-            // 3. Draw GPS Blue Dot & Orientation Cone
+            // 3. Draw Track Polylines
+            if (transformMatrix != null) {
+                tracks.forEach { trackWithPoints ->
+                    val pts = trackWithPoints.points
+                    if (pts.size >= 2) {
+                        val trackPath = Path()
+                        val p0 = transformMatrix.toPagePoint(pts[0].latitude, pts[0].longitude)
+                        val startX = (p0.xPt.toFloat() * scale) + offset.x
+                        val startY = (p0.yPt.toFloat() * scale) + offset.y
+                        trackPath.moveTo(startX, startY)
+
+                        for (i in 1 until pts.size) {
+                            val pi = transformMatrix.toPagePoint(pts[i].latitude, pts[i].longitude)
+                            val px = (pi.xPt.toFloat() * scale) + offset.x
+                            val py = (pi.yPt.toFloat() * scale) + offset.y
+                            trackPath.lineTo(px, py)
+                        }
+
+                        // Glow border
+                        drawPath(
+                            path = trackPath,
+                            color = Color(0x66FF6F00),
+                            style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
+                        // Core track line
+                        drawPath(
+                            path = trackPath,
+                            color = Color(0xFFFF8F00),
+                            style = Stroke(width = 3.5f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
+                    }
+                }
+            }
+
+            // 4. Draw Waypoint Pins
+            if (transformMatrix != null) {
+                waypoints.forEach { item ->
+                    val wp = item.waypoint
+                    val pt = transformMatrix.toPagePoint(wp.latitude, wp.longitude)
+                    val pinX = (pt.xPt.toFloat() * scale) + offset.x
+                    val pinY = (pt.yPt.toFloat() * scale) + offset.y
+
+                    val pinColor = if (wp.hasPhoto) Color(0xFF8E24AA) else Color(0xFFE53935)
+
+                    // Pin shadow
+                    drawCircle(
+                        color = Color(0x40000000),
+                        radius = 8.dp.toPx(),
+                        center = Offset(pinX, pinY + 2.dp.toPx())
+                    )
+
+                    // Pin Outer Body
+                    drawCircle(
+                        color = pinColor,
+                        radius = 7.dp.toPx(),
+                        center = Offset(pinX, pinY)
+                    )
+
+                    // Pin Inner Center
+                    drawCircle(
+                        color = Color.White,
+                        radius = 3.dp.toPx(),
+                        center = Offset(pinX, pinY)
+                    )
+                }
+            }
+
+            // 5. Draw GPS Blue Dot & Orientation Cone
             if (userPagePoint != null) {
                 val dotX = (userPagePoint.xPt.toFloat() * scale) + offset.x
                 val dotY = (userPagePoint.yPt.toFloat() * scale) + offset.y
 
-                // Estimated accuracy radius in screen pixels
                 val accuracyM = userAccuracyM ?: 10f
-                // Standard scale: 1 point ~ 0.35 mm; 1m is roughly 0.5 to 2 pt depending on map scale.
-                // We estimate ~ 1.5 pt per meter as general indicator
                 val accuracyRadiusPt = accuracyM * 1.5f
                 val accuracyRadiusPx = (accuracyRadiusPt * scale).coerceIn(12.dp.toPx(), 120.dp.toPx())
 

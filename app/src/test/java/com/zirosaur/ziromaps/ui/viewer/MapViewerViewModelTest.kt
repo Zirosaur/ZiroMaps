@@ -3,7 +3,13 @@ package com.zirosaur.ziromaps.ui.viewer
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.zirosaur.ziromaps.core.database.dao.MapProjectDao
+import com.zirosaur.ziromaps.core.database.dao.TrackDao
+import com.zirosaur.ziromaps.core.database.dao.WaypointDao
 import com.zirosaur.ziromaps.core.database.entity.MapProjectEntity
+import com.zirosaur.ziromaps.core.database.entity.TrackEntity
+import com.zirosaur.ziromaps.core.database.entity.WaypointEntity
+import com.zirosaur.ziromaps.core.database.model.TrackWithPoints
+import com.zirosaur.ziromaps.core.database.model.WaypointWithPhotos
 import com.zirosaur.ziromaps.core.geopdf.model.LatLon
 import com.zirosaur.ziromaps.core.geopdf.model.PagePoint
 import com.zirosaur.ziromaps.core.geopdf.model.TransformMatrix
@@ -12,6 +18,9 @@ import com.zirosaur.ziromaps.core.location.model.CompassData
 import com.zirosaur.ziromaps.core.location.model.UserLocation
 import com.zirosaur.ziromaps.core.location.provider.CompassProvider
 import com.zirosaur.ziromaps.core.location.provider.LocationProvider
+import com.zirosaur.ziromaps.service.TrackRecordingManager
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +35,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -40,11 +50,16 @@ class MapViewerViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val mapProjectDao = mockk<MapProjectDao>()
+    private val waypointDao = mockk<WaypointDao>(relaxed = true)
+    private val trackDao = mockk<TrackDao>(relaxed = true)
     private val locationProvider = mockk<LocationProvider>()
     private val compassProvider = mockk<CompassProvider>()
     private val tileRenderer = mockk<PdfTileRenderer>()
+    private val trackRecordingManager = TrackRecordingManager()
 
     private val projectFlow = MutableStateFlow<MapProjectEntity?>(null)
+    private val waypointsFlow = MutableStateFlow<List<WaypointWithPhotos>>(emptyList())
+    private val tracksFlow = MutableStateFlow<List<TrackWithPoints>>(emptyList())
     private val locationFlow = MutableSharedFlow<UserLocation>(replay = 1)
     private val compassFlow = MutableSharedFlow<CompassData>(replay = 1)
 
@@ -83,6 +98,8 @@ class MapViewerViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { mapProjectDao.getProjectById("test-map-123") } returns projectFlow
+        every { waypointDao.getWaypointsWithPhotosForProject("test-map-123") } returns waypointsFlow
+        every { trackDao.getTracksWithPointsForProject("test-map-123") } returns tracksFlow
         every { locationProvider.getLocationUpdates(any()) } returns locationFlow
         every { compassProvider.getCompassUpdates() } returns compassFlow
     }
@@ -92,17 +109,23 @@ class MapViewerViewModelTest {
         Dispatchers.resetMain()
     }
 
-    @Test
-    fun loadsProjectAndParsesTransformMatrix() = runTest(testDispatcher) {
+    private fun createViewModel(): MapViewerViewModel {
         val savedState = SavedStateHandle(mapOf("projectId" to "test-map-123"))
-        val viewModel = MapViewerViewModel(
+        return MapViewerViewModel(
             savedStateHandle = savedState,
             mapProjectDao = mapProjectDao,
+            waypointDao = waypointDao,
+            trackDao = trackDao,
             locationProvider = locationProvider,
             compassProvider = compassProvider,
+            trackRecordingManager = trackRecordingManager,
             tileRenderer = tileRenderer
         )
+    }
 
+    @Test
+    fun loadsProjectAndParsesTransformMatrix() = runTest(testDispatcher) {
+        val viewModel = createViewModel()
         projectFlow.value = testProject
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -119,15 +142,7 @@ class MapViewerViewModelTest {
 
     @Test
     fun togglesCoordinateFormatInOrder() = runTest(testDispatcher) {
-        val savedState = SavedStateHandle(mapOf("projectId" to "test-map-123"))
-        val viewModel = MapViewerViewModel(
-            savedStateHandle = savedState,
-            mapProjectDao = mapProjectDao,
-            locationProvider = locationProvider,
-            compassProvider = compassProvider,
-            tileRenderer = tileRenderer
-        )
-
+        val viewModel = createViewModel()
         assertEquals(CoordinateFormat.UTM, viewModel.uiState.value.coordinateFormat)
 
         viewModel.toggleCoordinateFormat()
@@ -142,19 +157,10 @@ class MapViewerViewModelTest {
 
     @Test
     fun locationUpdatesCalculatesUtmAndBoundsAccurately() = runTest(testDispatcher) {
-        val savedState = SavedStateHandle(mapOf("projectId" to "test-map-123"))
-        val viewModel = MapViewerViewModel(
-            savedStateHandle = savedState,
-            mapProjectDao = mapProjectDao,
-            locationProvider = locationProvider,
-            compassProvider = compassProvider,
-            tileRenderer = tileRenderer
-        )
-
+        val viewModel = createViewModel()
         projectFlow.value = testProject
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Inside polygon: (-7.05, 109.05)
         val insideLoc = UserLocation(
             latitude = -7.05,
             longitude = 109.05,
@@ -175,7 +181,6 @@ class MapViewerViewModelTest {
         assertTrue(stateInside.isGpsInsideBounds)
         assertNotNull(stateInside.userPagePoint)
 
-        // Outside polygon: (-7.5, 109.5)
         val outsideLoc = UserLocation(
             latitude = -7.5,
             longitude = 109.5,
@@ -194,14 +199,7 @@ class MapViewerViewModelTest {
 
     @Test
     fun compassUpdatesReflectInUiState() = runTest(testDispatcher) {
-        val savedState = SavedStateHandle(mapOf("projectId" to "test-map-123"))
-        val viewModel = MapViewerViewModel(
-            savedStateHandle = savedState,
-            mapProjectDao = mapProjectDao,
-            locationProvider = locationProvider,
-            compassProvider = compassProvider,
-            tileRenderer = tileRenderer
-        )
+        val viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
         compassFlow.emit(CompassData(azimuthDeg = 135f, cardinalDirection = "SE"))
@@ -213,23 +211,14 @@ class MapViewerViewModelTest {
 
     @Test
     fun centerOnGpsBehaviors() = runTest(testDispatcher) {
-        val savedState = SavedStateHandle(mapOf("projectId" to "test-map-123"))
-        val viewModel = MapViewerViewModel(
-            savedStateHandle = savedState,
-            mapProjectDao = mapProjectDao,
-            locationProvider = locationProvider,
-            compassProvider = compassProvider,
-            tileRenderer = tileRenderer
-        )
+        val viewModel = createViewModel()
         projectFlow.value = testProject
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Case 1: GPS is null
         viewModel.centerOnGps()
         assertTrue(viewModel.uiState.value.userNotice?.contains("Menunggu") == true)
         assertEquals(0L, viewModel.uiState.value.centerGpsTrigger)
 
-        // Case 2: GPS is outside bounds
         val outsideLoc = UserLocation(-7.8, 109.8, null, 10f, null, null, 1000L)
         locationFlow.emit(outsideLoc)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -238,12 +227,129 @@ class MapViewerViewModelTest {
         assertTrue(viewModel.uiState.value.userNotice?.contains("luar") == true)
         assertEquals(0L, viewModel.uiState.value.centerGpsTrigger)
 
-        // Case 3: GPS is inside bounds
         val insideLoc = UserLocation(-7.05, 109.05, null, 5f, null, null, 1000L)
         locationFlow.emit(insideLoc)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.centerOnGps()
         assertTrue(viewModel.uiState.value.centerGpsTrigger > 0L)
+    }
+
+    @Test
+    fun waypointCrudOperations() = runTest(testDispatcher) {
+        val viewModel = createViewModel()
+        projectFlow.value = testProject
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // 1. Open and Dismiss Dialog
+        viewModel.openAddWaypointDialog()
+        assertTrue(viewModel.uiState.value.showAddWaypointDialog)
+
+        viewModel.dismissAddWaypointDialog()
+        assertFalse(viewModel.uiState.value.showAddWaypointDialog)
+
+        // 2. Save Waypoint
+        coEvery { waypointDao.insert(any()) } returns Unit
+        viewModel.saveWaypoint(
+            title = "Pos Pantau 1",
+            note = "Dekat jembatan",
+            latitude = -7.05,
+            longitude = 109.05,
+            altitudeM = 50.0,
+            accuracyM = 3.5f
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify {
+            waypointDao.insert(match {
+                it.projectId == "test-map-123" &&
+                        it.title == "Pos Pantau 1" &&
+                        it.note == "Dekat jembatan" &&
+                        it.latitude == -7.05 &&
+                        it.longitude == 109.05
+            })
+        }
+        assertTrue(viewModel.uiState.value.userNotice?.contains("Pos Pantau 1") == true)
+
+        // 3. Selection & Detail Sheet
+        val wpEntity = WaypointEntity(
+            id = "wp-100",
+            projectId = "test-map-123",
+            title = "Pos Pantau 1",
+            note = "Dekat jembatan",
+            latitude = -7.05,
+            longitude = 109.05,
+            altitudeM = 50.0,
+            accuracyM = 3.5f,
+            hasPhoto = false,
+            createdAtEpochMs = 12345L
+        )
+        val wpWithPhotos = WaypointWithPhotos(waypoint = wpEntity, photos = emptyList())
+        waypointsFlow.value = listOf(wpWithPhotos)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.waypoints.size)
+
+        viewModel.selectWaypoint(wpWithPhotos)
+        assertEquals("wp-100", viewModel.uiState.value.selectedWaypoint?.waypoint?.id)
+
+        // 4. Update Waypoint
+        coEvery { waypointDao.getWaypointByIdSync("wp-100") } returns wpEntity
+        coEvery { waypointDao.update(any()) } returns Unit
+
+        viewModel.updateWaypoint("wp-100", "Pos Pantau Baru", "Catatan revisi")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify {
+            waypointDao.update(match {
+                it.id == "wp-100" && it.title == "Pos Pantau Baru" && it.note == "Catatan revisi"
+            })
+        }
+
+        // 5. Delete Waypoint
+        coEvery { waypointDao.deleteById("wp-100") } returns Unit
+        viewModel.deleteWaypoint("wp-100")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify { waypointDao.deleteById("wp-100") }
+        assertNull(viewModel.uiState.value.selectedWaypoint)
+        assertTrue(viewModel.uiState.value.userNotice?.contains("dihapus") == true)
+    }
+
+    @Test
+    fun tracksObservationAndRecordingState() = runTest(testDispatcher) {
+        val viewModel = createViewModel()
+        projectFlow.value = testProject
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val sampleTrack = TrackWithPoints(
+            track = TrackEntity(
+                id = "track-1",
+                projectId = "test-map-123",
+                name = "Jalur Survey",
+                startedAtEpochMs = 1000L,
+                endedAtEpochMs = null,
+                totalDistanceM = 1500.0
+            ),
+            points = emptyList()
+        )
+        tracksFlow.value = listOf(sampleTrack)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.tracks.size)
+        assertEquals("Jalur Survey", viewModel.uiState.value.tracks[0].track.name)
+
+        // Track recording updates via TrackRecordingManager
+        trackRecordingManager.onTrackStarted("track-1", "test-map-123")
+        trackRecordingManager.onPointRecorded(1500.0, 30)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isRecordingTrack)
+        assertEquals(1500.0, viewModel.uiState.value.recordedDistanceM, 0.01)
+
+        trackRecordingManager.onTrackStopped()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isRecordingTrack)
     }
 }

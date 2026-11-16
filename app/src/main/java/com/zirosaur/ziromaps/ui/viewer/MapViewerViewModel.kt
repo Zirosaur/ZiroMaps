@@ -1,21 +1,26 @@
 package com.zirosaur.ziromaps.ui.viewer
 
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zirosaur.ziromaps.core.database.dao.MapProjectDao
+import com.zirosaur.ziromaps.core.database.dao.TrackDao
+import com.zirosaur.ziromaps.core.database.dao.WaypointDao
 import com.zirosaur.ziromaps.core.database.entity.MapProjectEntity
+import com.zirosaur.ziromaps.core.database.entity.WaypointEntity
+import com.zirosaur.ziromaps.core.database.model.WaypointWithPhotos
 import com.zirosaur.ziromaps.core.geopdf.model.LatLon
 import com.zirosaur.ziromaps.core.geopdf.model.PagePoint
 import com.zirosaur.ziromaps.core.geopdf.model.TransformMatrix
 import com.zirosaur.ziromaps.core.geopdf.tile.MapTile
 import com.zirosaur.ziromaps.core.geopdf.tile.PdfTileRenderer
 import com.zirosaur.ziromaps.core.location.converter.UtmConverter
-import com.zirosaur.ziromaps.core.location.model.CompassData
-import com.zirosaur.ziromaps.core.location.model.UserLocation
 import com.zirosaur.ziromaps.core.location.provider.CompassProvider
 import com.zirosaur.ziromaps.core.location.provider.LocationProvider
+import com.zirosaur.ziromaps.service.TrackRecordingManager
+import com.zirosaur.ziromaps.service.TrackRecordingService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,14 +32,18 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
 class MapViewerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val mapProjectDao: MapProjectDao,
+    private val waypointDao: WaypointDao,
+    private val trackDao: TrackDao,
     private val locationProvider: LocationProvider,
     private val compassProvider: CompassProvider,
+    private val trackRecordingManager: TrackRecordingManager,
     val tileRenderer: PdfTileRenderer
 ) : ViewModel() {
 
@@ -44,12 +53,15 @@ class MapViewerViewModel @Inject constructor(
     val uiState: StateFlow<MapViewerUiState> = _uiState.asStateFlow()
 
     private var locationJob: Job? = null
+    private var waypointsJob: Job? = null
+    private var tracksJob: Job? = null
 
     init {
         if (projectId.isNotBlank()) {
             observeProject(projectId)
         }
         observeCompass()
+        observeRecordingManager()
         startLocationUpdates()
     }
 
@@ -102,6 +114,49 @@ class MapViewerViewModel @Inject constructor(
                         errorMessage = "Gagal memuat peta: ${throwable.localizedMessage}"
                     )
                 }
+            }
+            .launchIn(viewModelScope)
+
+        observeWaypoints(id)
+        observeTracks(id)
+    }
+
+    private fun observeWaypoints(projectId: String) {
+        waypointsJob?.cancel()
+        waypointsJob = waypointDao.getWaypointsWithPhotosForProject(projectId)
+            .onEach { list ->
+                _uiState.update { current ->
+                    // Also update selected waypoint if modified
+                    val updatedSelected = current.selectedWaypoint?.let { sel ->
+                        list.find { it.waypoint.id == sel.waypoint.id }
+                    }
+                    current.copy(waypoints = list, selectedWaypoint = updatedSelected)
+                }
+            }
+            .catch { /* Fallback silent */ }
+            .launchIn(viewModelScope)
+    }
+
+    private fun observeTracks(projectId: String) {
+        tracksJob?.cancel()
+        tracksJob = trackDao.getTracksWithPointsForProject(projectId)
+            .onEach { list ->
+                _uiState.update { it.copy(tracks = list) }
+            }
+            .catch { /* Fallback silent */ }
+            .launchIn(viewModelScope)
+    }
+
+    private fun observeRecordingManager() {
+        trackRecordingManager.isRecording
+            .onEach { recording ->
+                _uiState.update { it.copy(isRecordingTrack = recording) }
+            }
+            .launchIn(viewModelScope)
+
+        trackRecordingManager.recordedDistanceM
+            .onEach { distance ->
+                _uiState.update { it.copy(recordedDistanceM = distance) }
             }
             .launchIn(viewModelScope)
     }
@@ -168,6 +223,92 @@ class MapViewerViewModel @Inject constructor(
         _uiState.update { it.copy(hasLocationPermission = granted) }
         if (granted) {
             startLocationUpdates()
+        }
+    }
+
+    fun updateMapCenter(center: LatLon?) {
+        _uiState.update { it.copy(mapCenterLatLon = center) }
+    }
+
+    fun openAddWaypointDialog() {
+        _uiState.update { it.copy(showAddWaypointDialog = true) }
+    }
+
+    fun dismissAddWaypointDialog() {
+        _uiState.update { it.copy(showAddWaypointDialog = false) }
+    }
+
+    fun saveWaypoint(
+        title: String,
+        note: String,
+        latitude: Double,
+        longitude: Double,
+        altitudeM: Double?,
+        accuracyM: Float?
+    ) {
+        val projId = _uiState.value.mapProject?.id ?: return
+        viewModelScope.launch {
+            val waypoint = WaypointEntity(
+                id = UUID.randomUUID().toString(),
+                projectId = projId,
+                title = title,
+                note = note,
+                latitude = latitude,
+                longitude = longitude,
+                altitudeM = altitudeM,
+                accuracyM = accuracyM,
+                hasPhoto = false,
+                createdAtEpochMs = System.currentTimeMillis()
+            )
+            waypointDao.insert(waypoint)
+            _uiState.update {
+                it.copy(
+                    showAddWaypointDialog = false,
+                    userNotice = "Waypoint \"$title\" berhasil disimpan."
+                )
+            }
+        }
+    }
+
+    fun selectWaypoint(wp: WaypointWithPhotos) {
+        _uiState.update { it.copy(selectedWaypoint = wp) }
+    }
+
+    fun dismissWaypointDetail() {
+        _uiState.update { it.copy(selectedWaypoint = null) }
+    }
+
+    fun updateWaypoint(waypointId: String, newTitle: String, newNote: String) {
+        viewModelScope.launch {
+            val existing = waypointDao.getWaypointByIdSync(waypointId)
+            if (existing != null) {
+                waypointDao.update(existing.copy(title = newTitle, note = newNote))
+                _uiState.update { it.copy(userNotice = "Waypoint berhasil diperbarui.") }
+            }
+        }
+    }
+
+    fun deleteWaypoint(waypointId: String) {
+        viewModelScope.launch {
+            waypointDao.deleteById(waypointId)
+            _uiState.update {
+                it.copy(
+                    selectedWaypoint = null,
+                    userNotice = "Waypoint telah dihapus."
+                )
+            }
+        }
+    }
+
+    fun toggleTrackRecording(context: Context) {
+        val project = _uiState.value.mapProject ?: return
+        if (_uiState.value.isRecordingTrack) {
+            TrackRecordingService.stop(context)
+            _uiState.update { it.copy(userNotice = "Perekaman track dihentikan.") }
+        } else {
+            val trackName = "Track ${System.currentTimeMillis() % 10000}"
+            TrackRecordingService.start(context, project.id, trackName)
+            _uiState.update { it.copy(userNotice = "Perekaman track dimulai.") }
         }
     }
 

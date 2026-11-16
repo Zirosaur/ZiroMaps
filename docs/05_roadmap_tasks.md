@@ -18,7 +18,7 @@
 - [x] **T2.1:** Implementasi `:core:location` (`FusedLocationProviderClient` Flow, *azimuth* kompas, dan konverter `WGS84 <-> UTM` + unit test akurasi UTM).
 - [x] **T2.2:** Bangun `MapLibraryScreen` dengan alur impor SAF dan validasi GeoPDF.
 - [x] **T2.3:** Bangun `MapViewerScreen` (kanvas *pan/zoom* tile PDF + *blue dot* GPS *real-time* + panel koordinat WGS84/UTM).
-- [ ] **T2.4:** Implementasi fitur tambah *Waypoint* manual, *WaypointDetailSheet*, dan perekaman *Track* (termasuk *Foreground Service*).
+- [x] **T2.4:** Implementasi fitur tambah *Waypoint* manual, *WaypointDetailSheet*, dan perekaman *Track* (termasuk *Foreground Service*).
 
 ## Phase 3: Kamera Stamp Terintegrasi
 - [ ] **T3.1:** Implementasi modul `:core:camera` untuk *preview* dan *capture* menggunakan `CameraX` dengan penanganan rotasi orientasi perangkat.

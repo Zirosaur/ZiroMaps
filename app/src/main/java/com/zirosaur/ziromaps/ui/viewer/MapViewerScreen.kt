@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,17 +33,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.zirosaur.ziromaps.R
+import com.zirosaur.ziromaps.ui.viewer.components.AddWaypointDialog
 import com.zirosaur.ziromaps.ui.viewer.components.CoordinateStatusBar
 import com.zirosaur.ziromaps.ui.viewer.components.MapCanvas
 import com.zirosaur.ziromaps.ui.viewer.components.MapViewerBottomBar
+import com.zirosaur.ziromaps.ui.viewer.components.WaypointDetailSheet
 import kotlinx.coroutines.launch
 
 @Composable
@@ -123,10 +121,15 @@ fun MapViewerScreen(
                     mapId = project.id,
                     pageWidthPt = project.pageWidthPt,
                     pageHeightPt = project.pageHeightPt,
+                    transformMatrix = uiState.transformMatrix,
                     userPagePoint = uiState.userPagePoint,
                     userAccuracyM = uiState.currentLocation?.accuracyM,
                     userAzimuthDeg = uiState.currentCompass?.azimuthDeg,
                     centerGpsTrigger = uiState.centerGpsTrigger,
+                    waypoints = uiState.waypoints,
+                    tracks = uiState.tracks,
+                    onWaypointClick = { waypoint -> viewModel.selectWaypoint(waypoint) },
+                    onMapCenterChanged = { centerLatLon -> viewModel.updateMapCenter(centerLatLon) },
                     loadTileBitmap = { tile -> viewModel.renderTile(tile) },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -171,17 +174,11 @@ fun MapViewerScreen(
 
                 // Bottom Action Buttons Overlay
                 MapViewerBottomBar(
+                    isRecordingTrack = uiState.isRecordingTrack,
+                    recordedDistanceM = uiState.recordedDistanceM,
                     onCenterGpsClick = { viewModel.centerOnGps() },
-                    onAddPinClick = {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Tambah Waypoint (Tersedia di T2.4)")
-                        }
-                    },
-                    onRecordTrackClick = {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Perekaman Track (Tersedia di T2.4)")
-                        }
-                    },
+                    onAddPinClick = { viewModel.openAddWaypointDialog() },
+                    onRecordTrackClick = { viewModel.toggleTrackRecording(context) },
                     onCameraStampClick = {
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar("Kamera Stamp (Tersedia di Phase 3)")
@@ -189,6 +186,34 @@ fun MapViewerScreen(
                     },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
+
+                // Add Waypoint Dialog
+                if (uiState.showAddWaypointDialog) {
+                    val defaultTitle = "WP-${String.format(java.util.Locale.US, "%03d", uiState.waypoints.size + 1)}"
+                    AddWaypointDialog(
+                        defaultTitle = defaultTitle,
+                        gpsLocation = uiState.currentLocation,
+                        mapCenterLatLon = uiState.mapCenterLatLon,
+                        onDismiss = { viewModel.dismissAddWaypointDialog() },
+                        onSave = { title, note, lat, lon, alt, acc ->
+                            viewModel.saveWaypoint(title, note, lat, lon, alt, acc)
+                        }
+                    )
+                }
+
+                // Waypoint Detail Bottom Sheet
+                uiState.selectedWaypoint?.let { selected ->
+                    WaypointDetailSheet(
+                        waypointWithPhotos = selected,
+                        onDismiss = { viewModel.dismissWaypointDetail() },
+                        onEdit = { wpId, newTitle, newNote ->
+                            viewModel.updateWaypoint(wpId, newTitle, newNote)
+                        },
+                        onDelete = { wpId ->
+                            viewModel.deleteWaypoint(wpId)
+                        }
+                    )
+                }
             } else if (uiState.isLoading) {
                 // Loading state
                 Column(
