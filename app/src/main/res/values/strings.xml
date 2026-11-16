@@ -16,4 +16,14 @@
     <string name="waypoint_count_format">%1$d Waypoint</string>
     <string name="photo_count_format">%1$d Foto</string>
     <string name="import_success">Peta berhasil diimpor.</string>
+    <string name="gps_searching">Mencari GPS…</string>
+    <string name="gps_outside_map">Di Luar Peta</string>
+    <string name="gps_accuracy_format">±%1$.1f m</string>
+    <string name="center_gps">Pusatkan GPS</string>
+    <string name="add_pin">Tambah Pin</string>
+    <string name="record_track">Rekam Track</string>
+    <string name="camera_stamp">Kamera Stamp</string>
+    <string name="permission_location_rationale">Izin lokasi diperlukan untuk menampilkan posisi GPS Anda di atas peta.</string>
+    <string name="grant_permission">Izinkan Lokasi</string>
+    <string name="feature_coming_soon">Fitur ini tersedia pada fase berikutnya.</string>
 </resources>
