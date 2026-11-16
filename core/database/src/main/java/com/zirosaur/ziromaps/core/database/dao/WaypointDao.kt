@@ -38,6 +38,9 @@ interface WaypointDao {
     @Query("SELECT * FROM waypoints WHERE projectId = :projectId ORDER BY createdAtEpochMs ASC")
     fun getWaypointsForProject(projectId: String): Flow<List<WaypointEntity>>
 
+    @Query("SELECT COUNT(*) FROM waypoints WHERE projectId = :projectId")
+    suspend fun getWaypointCountForProject(projectId: String): Int
+
     @Transaction
     @Query("SELECT * FROM waypoints WHERE id = :id")
     fun getWaypointWithPhotos(id: String): Flow<WaypointWithPhotos?>

@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.zirosaur.ziromaps.ui.camera.CameraStampScreen
 import com.zirosaur.ziromaps.ui.library.MapLibraryScreen
 import com.zirosaur.ziromaps.ui.viewer.MapViewerScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -44,7 +45,21 @@ class MainActivity : ComponentActivity() {
                             val projectId = backStackEntry.arguments?.getString("projectId").orEmpty()
                             MapViewerScreen(
                                 projectId = projectId,
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = { navController.popBackStack() },
+                                onOpenCameraStamp = { id -> navController.navigate("camera_stamp/$id") }
+                            )
+                        }
+                        composable(
+                            route = "camera_stamp/{projectId}",
+                            arguments = listOf(
+                                navArgument("projectId") { type = NavType.StringType }
+                            )
+                        ) { backStackEntry ->
+                            val projectId = backStackEntry.arguments?.getString("projectId").orEmpty()
+                            CameraStampScreen(
+                                projectId = projectId,
+                                onNavigateBack = { navController.popBackStack() },
+                                onPhotoSaved = { _ -> navController.popBackStack() }
                             )
                         }
                     }

@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 fun MapViewerScreen(
     projectId: String,
     onNavigateBack: () -> Unit,
+    onOpenCameraStamp: (projectId: String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: MapViewerViewModel = hiltViewModel()
 ) {
@@ -179,11 +180,7 @@ fun MapViewerScreen(
                     onCenterGpsClick = { viewModel.centerOnGps() },
                     onAddPinClick = { viewModel.openAddWaypointDialog() },
                     onRecordTrackClick = { viewModel.toggleTrackRecording(context) },
-                    onCameraStampClick = {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Kamera Stamp (Tersedia di Phase 3)")
-                        }
-                    },
+                    onCameraStampClick = { onOpenCameraStamp(projectId) },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
 

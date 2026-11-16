@@ -28,10 +28,10 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.camera.core)
+    api(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
+    api(libs.androidx.camera.lifecycle)
+    api(libs.androidx.camera.view)
     implementation(libs.androidx.exifinterface)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)

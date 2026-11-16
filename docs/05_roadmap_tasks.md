@@ -23,7 +23,7 @@
 ## Phase 3: Kamera Stamp Terintegrasi
 - [x] **T3.1:** Implementasi modul `:core:camera` untuk *preview* dan *capture* menggunakan `CameraX` dengan penanganan rotasi orientasi perangkat.
 - [x] **T3.2:** Implementasi *Canvas Watermark Renderer* (menggambar koordinat, akurasi, UTM, azimuth, waktu, dan catatan ke *bitmap*) + *EXIF GPS Writer*.
-- [ ] **T3.3:** Hubungkan `CameraStampScreen` dengan `MapViewerScreen` sehingga setiap foto tersimpan otomatis membuat *pin* foto di peta aktif.
+- [x] **T3.3:** Hubungkan `CameraStampScreen` dengan `MapViewerScreen` sehingga setiap foto tersimpan otomatis membuat *pin* foto di peta aktif.
 
 ## Phase 4: Ekspor & Uji Lapangan
 - [ ] **T4.1:** Implementasi `:core:export` untuk menghasilkan file **GeoJSON**, **CSV**, dan **KMZ** (beserta foto) + unit test format output.

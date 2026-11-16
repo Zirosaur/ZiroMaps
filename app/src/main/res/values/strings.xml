@@ -47,4 +47,13 @@
     <string name="track_notification_channel">Perekaman Track GPS</string>
     <string name="track_notification_desc">Notifikasi aktif saat perekaman jejak GPS berjalan di background.</string>
     <string name="track_status_format">Jarak: %1$.2f km | Titik: %2$d</string>
+    <string name="camera_permission_rationale">Izin kamera diperlukan untuk mengambil foto dokumentasi berstempel geospasial.</string>
+    <string name="grant_camera_permission">Izinkan Kamera</string>
+    <string name="take_photo">Ambil Foto</string>
+    <string name="photo_saved">Foto berhasil disimpan dan ditautkan ke peta.</string>
+    <string name="saving_photo">Menyimpan foto &amp; menyematkan watermark…</string>
+    <string name="quick_note_placeholder">Catatan foto singkat (opsional)</string>
+    <string name="accuracy_warning">Akurasi Rendah</string>
+    <string name="gps_not_fixed_warning">Mencari GPS…</string>
+    <string name="open_settings">Buka Pengaturan</string>
 </resources>
