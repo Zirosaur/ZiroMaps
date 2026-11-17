@@ -115,4 +115,23 @@ class CanvasWatermarkRendererTest {
         assertEquals(1920, result.width)
         assertEquals(1080, result.height)
     }
+
+    @Test
+    fun renderWatermark_customConfig_positionsCorrectly() {
+        val source = Bitmap.createBitmap(1000, 1000, Bitmap.Config.ARGB_8888)
+        val config = com.zirosaur.ziromaps.core.camera.watermark.WatermarkConfig(
+            position = com.zirosaur.ziromaps.core.camera.watermark.WatermarkPosition.TOP_LEFT,
+            textSize = com.zirosaur.ziromaps.core.camera.watermark.WatermarkTextSize.LARGE,
+            showAltitude = false
+        )
+        val data = WatermarkData(
+            latitude = -7.0,
+            longitude = 110.0,
+            config = config
+        )
+        val result = renderer.renderWatermark(source, data, inPlace = false)
+        assertNotNull(result)
+        val lines = renderer.generateWatermarkLines(data)
+        assertTrue(lines.none { it.contains("Alt:") })
+    }
 }

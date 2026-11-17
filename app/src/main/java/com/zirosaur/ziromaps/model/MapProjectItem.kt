@@ -13,6 +13,9 @@ data class MapProjectItem(
     val epsgCode: Int?,
     val waypointCount: Int,
     val photoCount: Int,
+    val trackCount: Int = 0,
+    val fileSizeBytes: Long = 0L,
+    val formattedFileSize: String = "",
     val createdAtEpochMs: Long,
     val formattedDate: String
 )

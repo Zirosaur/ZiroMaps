@@ -9,5 +9,6 @@ import com.zirosaur.ziromaps.core.database.entity.MapProjectEntity
 data class MapProjectSummary(
     @Embedded val project: MapProjectEntity,
     val waypointCount: Int = 0,
-    val photoCount: Int = 0
+    val photoCount: Int = 0,
+    val trackCount: Int = 0
 )

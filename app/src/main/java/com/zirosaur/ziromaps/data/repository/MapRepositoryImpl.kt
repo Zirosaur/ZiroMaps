@@ -96,6 +96,7 @@ class MapRepositoryImpl @Inject constructor(
                     )
                     mapProjectDao.insert(entity)
 
+                    val fileSizeBytes = if (targetPdf.exists()) targetPdf.length() else 0L
                     val item = MapProjectItem(
                         id = entity.id,
                         name = entity.name,
@@ -106,6 +107,9 @@ class MapRepositoryImpl @Inject constructor(
                         epsgCode = entity.epsgCode,
                         waypointCount = 0,
                         photoCount = 0,
+                        trackCount = 0,
+                        fileSizeBytes = fileSizeBytes,
+                        formattedFileSize = formatFileSize(fileSizeBytes),
                         createdAtEpochMs = entity.createdAtEpochMs,
                         formattedDate = dateFormatter.format(Date(entity.createdAtEpochMs))
                     )
@@ -170,7 +174,20 @@ class MapRepositoryImpl @Inject constructor(
         }
     }
 
+    private fun formatFileSize(bytes: Long): String {
+        if (bytes <= 0L) return "0 B"
+        val kb = bytes / 1024.0
+        val mb = kb / 1024.0
+        return if (mb >= 1.0) {
+            String.format(Locale.US, "%.1f MB", mb)
+        } else {
+            String.format(Locale.US, "%.0f KB", kb)
+        }
+    }
+
     private fun MapProjectSummary.toItem(): MapProjectItem {
+        val file = File(project.pdfLocalPath)
+        val fileSizeBytes = if (file.exists()) file.length() else 0L
         return MapProjectItem(
             id = project.id,
             name = project.name,
@@ -181,6 +198,9 @@ class MapRepositoryImpl @Inject constructor(
             epsgCode = project.epsgCode,
             waypointCount = waypointCount,
             photoCount = photoCount,
+            trackCount = trackCount,
+            fileSizeBytes = fileSizeBytes,
+            formattedFileSize = formatFileSize(fileSizeBytes),
             createdAtEpochMs = project.createdAtEpochMs,
             formattedDate = dateFormatter.format(Date(project.createdAtEpochMs))
         )

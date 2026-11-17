@@ -22,6 +22,24 @@ interface PdfTileRenderer {
     ): Bitmap?
 
     /**
+     * Renders or retrieves a cached thumbnail bitmap of the specified PDF page.
+     *
+     * @param pdfFile the source PDF file
+     * @param mapId unique ID of the map project
+     * @param targetWidth target thumbnail width in pixels
+     * @param targetHeight target thumbnail height in pixels
+     * @param pageIndex 0-based PDF page index (default 0)
+     * @return the rendered thumbnail [Bitmap] or null if unavailable
+     */
+    suspend fun renderThumbnail(
+        pdfFile: File,
+        mapId: String,
+        targetWidth: Int = 240,
+        targetHeight: Int = 240,
+        pageIndex: Int = 0
+    ): Bitmap?
+
+    /**
      * Clears all memory and disk cached tiles for the specified [mapId].
      */
     suspend fun clearCache(mapId: String)

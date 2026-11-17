@@ -27,22 +27,18 @@ fun LiveWatermarkOverlay(
     uiState: CameraStampUiState,
     modifier: Modifier = Modifier
 ) {
+    val config = uiState.watermarkConfig
     val loc = uiState.currentLocation
     val utm = uiState.currentUtm
     val compass = uiState.currentCompass
     val timeFormatter = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.getDefault()) }
     val currentTimeStr = remember(System.currentTimeMillis()) { timeFormatter.format(Date()) }
 
-    Box(
-        modifier = modifier
-            .background(
-                color = Color.Black.copy(alpha = 0.55f),
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(horizontal = 10.dp, vertical = 8.dp)
-    ) {
-        Column {
-            // Line 1: Lat, Lon, Accuracy
+    val baseFontSize = (10f * config.textSize.scaleFactor).sp
+
+    val lines = buildList {
+        // Line 1: Lat, Lon, Accuracy
+        if (config.showLatLon) {
             val line1 = if (loc != null) {
                 val acc = loc.accuracyM
                 val accText = when {
@@ -54,52 +50,65 @@ fun LiveWatermarkOverlay(
             } else {
                 "Lat: -  Lon: - (Mencari GPS…)"
             }
-            Text(
-                text = line1,
-                color = Color.White,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
+            add(line1)
+        }
 
-            Spacer(modifier = Modifier.height(2.dp))
-
-            // Line 2: UTM & Azimuth
+        // Line 2: UTM & Azimuth
+        val line2Parts = mutableListOf<String>()
+        if (config.showUtm) {
             val utmStr = utm?.toFormattedString() ?: "-"
+            line2Parts.add("UTM: $utmStr")
+        }
+        if (config.showAzimuth) {
             val azimuthStr = CompassDirection.formatAzimuth(compass?.azimuthDeg)
-            Text(
-                text = "UTM: $utmStr  |  Azimuth: $azimuthStr",
-                color = Color.White,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
+            line2Parts.add("Azimuth: $azimuthStr")
+        }
+        if (line2Parts.isNotEmpty()) {
+            add(line2Parts.joinToString("  |  "))
+        }
+
+        // Altitude
+        if (config.showAltitude && loc?.altitudeM != null) {
+            add(String.format(Locale.US, "Elevasi: %.1f m dpl", loc.altitudeM))
+        }
+
+        // Timestamp
+        if (config.showTimestamp) {
+            add("Waktu: $currentTimeStr")
+        }
+
+        // Map Name & Quick Note
+        val project = if (config.showMapName) uiState.projectName.trim().ifBlank { null } else null
+        val note = if (config.showNote) uiState.quickNote.trim().ifBlank { null } else null
+        if (project != null || note != null) {
+            val line = when {
+                project != null && note != null -> "Peta: $project | $note"
+                project != null -> "Peta: $project"
+                else -> "Catatan: $note"
+            }
+            add(line)
+        }
+    }
+
+    if (lines.isEmpty()) return
+
+    Box(
+        modifier = modifier
+            .background(
+                color = Color.Black.copy(alpha = 0.58f),
+                shape = RoundedCornerShape(8.dp)
             )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            // Line 3: Time
-            Text(
-                text = "Waktu: $currentTimeStr",
-                color = Color.White,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-
-            // Line 4: Project & Note (if available)
-            val project = uiState.projectName.trim().ifBlank { null }
-            val note = uiState.quickNote.trim().ifBlank { null }
-            if (project != null || note != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                val line4 = when {
-                    project != null && note != null -> "Peta: $project | $note"
-                    project != null -> "Peta: $project"
-                    else -> "Catatan: $note"
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+    ) {
+        Column {
+            lines.forEachIndexed { index, line ->
+                if (index > 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
                 }
                 Text(
-                    text = line4,
+                    text = line,
                     color = Color.White,
-                    fontSize = 10.sp,
+                    fontSize = baseFontSize,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold
                 )

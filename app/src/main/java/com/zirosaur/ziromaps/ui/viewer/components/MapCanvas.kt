@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -38,12 +39,15 @@ import com.zirosaur.ziromaps.core.geopdf.model.LatLon
 import com.zirosaur.ziromaps.core.geopdf.model.PagePoint
 import com.zirosaur.ziromaps.core.geopdf.model.TransformMatrix
 import com.zirosaur.ziromaps.core.geopdf.tile.MapTile
+import com.zirosaur.ziromaps.ui.viewer.GpsFollowMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -57,11 +61,16 @@ fun MapCanvas(
     userPagePoint: PagePoint?,
     userAccuracyM: Float?,
     userAzimuthDeg: Float?,
-    centerGpsTrigger: Long,
+    followMode: GpsFollowMode = GpsFollowMode.FREE,
+    rotationDeg: Float = 0f,
+    panToLatLon: LatLon? = null,
+    centerGpsTrigger: Long = 0L,
     waypoints: List<WaypointWithPhotos> = emptyList(),
     tracks: List<TrackWithPoints> = emptyList(),
     onWaypointClick: (WaypointWithPhotos) -> Unit = {},
     onMapCenterChanged: (LatLon?) -> Unit = {},
+    onMetersPerPixelChanged: (Double) -> Unit = {},
+    onUserPan: () -> Unit = {},
     loadTileBitmap: suspend (MapTile) -> Bitmap?,
     modifier: Modifier = Modifier
 ) {
@@ -88,13 +97,25 @@ fun MapCanvas(
         }
     }
 
-    // Update map center coordinate
+    // Update map center coordinate and metersPerPixel
     LaunchedEffect(offset, scale, viewportSize, transformMatrix) {
         if (viewportSize.width > 0 && viewportSize.height > 0 && transformMatrix != null) {
             val centerPtX = (viewportSize.width / 2f - offset.x) / scale
             val centerPtY = (viewportSize.height / 2f - offset.y) / scale
             val centerLatLon = transformMatrix.toLatLon(centerPtX.toDouble(), centerPtY.toDouble())
             onMapCenterChanged(centerLatLon)
+
+            // Compute meters per pixel
+            val offsetPtX = centerPtX.toDouble() + 50.0
+            val offsetLatLon = transformMatrix.toLatLon(offsetPtX, centerPtY.toDouble())
+            val dLat = Math.toRadians(offsetLatLon.latitude - centerLatLon.latitude)
+            val dLon = Math.toRadians(offsetLatLon.longitude - centerLatLon.longitude)
+            val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(centerLatLon.latitude)) * cos(Math.toRadians(offsetLatLon.latitude)) * sin(dLon / 2).pow(2)
+            val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+            val distM = 6371000.0 * c
+            val metersPerPt = distM / 50.0
+            val metersPerPixel = metersPerPt / scale
+            onMetersPerPixelChanged(metersPerPixel)
         }
     }
 
@@ -103,6 +124,27 @@ fun MapCanvas(
         if (centerGpsTrigger > 0L && userPagePoint != null && viewportSize.width > 0) {
             val targetX = (viewportSize.width / 2f) - (userPagePoint.xPt.toFloat() * scale)
             val targetY = (viewportSize.height / 2f) - (userPagePoint.yPt.toFloat() * scale)
+            offset = Offset(targetX, targetY)
+        }
+    }
+
+    // React to Follow Mode updates
+    LaunchedEffect(userPagePoint, followMode, viewportSize) {
+        if ((followMode == GpsFollowMode.FOLLOW_LOCATION || followMode == GpsFollowMode.HEADING) &&
+            userPagePoint != null && viewportSize.width > 0
+        ) {
+            val targetX = (viewportSize.width / 2f) - (userPagePoint.xPt.toFloat() * scale)
+            val targetY = (viewportSize.height / 2f) - (userPagePoint.yPt.toFloat() * scale)
+            offset = Offset(targetX, targetY)
+        }
+    }
+
+    // Pan to specific LatLon (e.g. from Layers list selection)
+    LaunchedEffect(panToLatLon) {
+        if (panToLatLon != null && transformMatrix != null && viewportSize.width > 0) {
+            val targetPt = transformMatrix.toPagePoint(panToLatLon.latitude, panToLatLon.longitude)
+            val targetX = (viewportSize.width / 2f) - (targetPt.xPt.toFloat() * scale)
+            val targetY = (viewportSize.height / 2f) - (targetPt.yPt.toFloat() * scale)
             offset = Offset(targetX, targetY)
         }
     }
@@ -120,10 +162,12 @@ fun MapCanvas(
     val visibleTiles = remember(offset, scale, viewportSize, pageWidthPt, pageHeightPt, zoomLevel) {
         if (viewportSize.width == 0 || viewportSize.height == 0) return@remember emptyList()
 
-        val xMinPt = (-offset.x / scale).coerceAtLeast(0f)
-        val yMinPt = (-offset.y / scale).coerceAtLeast(0f)
-        val xMaxPt = ((viewportSize.width - offset.x) / scale).coerceAtMost(pageWidthPt.toFloat())
-        val yMaxPt = ((viewportSize.height - offset.y) / scale).coerceAtMost(pageHeightPt.toFloat())
+        // Generous margin for smooth panning and rotation
+        val marginPx = 250f
+        val xMinPt = ((-offset.x - marginPx) / scale).coerceAtLeast(0f)
+        val yMinPt = ((-offset.y - marginPx) / scale).coerceAtLeast(0f)
+        val xMaxPt = (((viewportSize.width - offset.x) + marginPx) / scale).coerceAtMost(pageWidthPt.toFloat())
+        val yMaxPt = (((viewportSize.height - offset.y) + marginPx) / scale).coerceAtMost(pageHeightPt.toFloat())
 
         val minTileX = (xMinPt / tileSpanPt).toInt().coerceAtLeast(0)
         val maxTileX = (xMaxPt / tileSpanPt).toInt()
@@ -172,6 +216,9 @@ fun MapCanvas(
             .onSizeChanged { viewportSize = it }
             .pointerInput(Unit) {
                 detectTransformGestures { centroid, pan, zoom, _ ->
+                    if (pan.x != 0f || pan.y != 0f) {
+                        onUserPan()
+                    }
                     val oldScale = scale
                     val newScale = (oldScale * zoom).coerceIn(0.1f, 10.0f)
                     val factor = newScale / oldScale
@@ -204,6 +251,9 @@ fun MapCanvas(
                         }
                     }
                 )
+            }
+            .graphicsLayer {
+                rotationZ = rotationDeg
             }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {

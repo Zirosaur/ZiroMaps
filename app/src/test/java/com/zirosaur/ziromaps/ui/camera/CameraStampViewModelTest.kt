@@ -8,6 +8,8 @@ import com.zirosaur.ziromaps.core.camera.model.CapturedImage
 import com.zirosaur.ziromaps.core.camera.model.FlashMode
 import com.zirosaur.ziromaps.core.camera.model.LensFacing
 import com.zirosaur.ziromaps.core.camera.watermark.PhotoProcessor
+import com.zirosaur.ziromaps.core.camera.watermark.WatermarkConfig
+import com.zirosaur.ziromaps.core.camera.watermark.WatermarkPosition
 import com.zirosaur.ziromaps.core.database.dao.MapProjectDao
 import com.zirosaur.ziromaps.core.database.dao.PhotoRecordDao
 import com.zirosaur.ziromaps.core.database.dao.WaypointDao
@@ -18,6 +20,7 @@ import com.zirosaur.ziromaps.core.location.model.CompassData
 import com.zirosaur.ziromaps.core.location.model.UserLocation
 import com.zirosaur.ziromaps.core.location.provider.CompassProvider
 import com.zirosaur.ziromaps.core.location.provider.LocationProvider
+import com.zirosaur.ziromaps.data.preferences.StampSettingsManager
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -36,6 +39,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -59,12 +63,15 @@ class CameraStampViewModelTest {
     private lateinit var mapProjectDao: MapProjectDao
     private lateinit var waypointDao: WaypointDao
     private lateinit var photoRecordDao: PhotoRecordDao
+    private lateinit var stampSettingsManager: StampSettingsManager
     private lateinit var context: Context
 
     private val cameraStateFlow = MutableStateFlow<CameraState>(CameraState.Ready)
     private val flashModeFlow = MutableStateFlow(FlashMode.OFF)
     private val lensFacingFlow = MutableStateFlow(LensFacing.BACK)
     private val zoomRatioFlow = MutableStateFlow(1f)
+    private val minZoomRatioFlow = MutableStateFlow(1f)
+    private val maxZoomRatioFlow = MutableStateFlow(5f)
     private val locationFlow = MutableSharedFlow<UserLocation>(replay = 1)
     private val compassFlow = MutableSharedFlow<CompassData>(replay = 1)
 
@@ -79,6 +86,8 @@ class CameraStampViewModelTest {
             every { flashMode } returns flashModeFlow
             every { lensFacing } returns lensFacingFlow
             every { zoomRatio } returns zoomRatioFlow
+            every { minZoomRatio } returns minZoomRatioFlow
+            every { maxZoomRatio } returns maxZoomRatioFlow
         }
         photoProcessor = mockk(relaxed = true)
         locationProvider = mockk(relaxed = true) {
@@ -90,6 +99,10 @@ class CameraStampViewModelTest {
         mapProjectDao = mockk(relaxed = true)
         waypointDao = mockk(relaxed = true)
         photoRecordDao = mockk(relaxed = true)
+        stampSettingsManager = mockk(relaxed = true) {
+            every { loadConfig() } returns WatermarkConfig()
+            every { getLastPhotoPath() } returns null
+        }
         context = mockk(relaxed = true) {
             every { filesDir } returns tempFolder.root
         }
@@ -114,7 +127,8 @@ class CameraStampViewModelTest {
             compassProvider = compassProvider,
             mapProjectDao = mapProjectDao,
             waypointDao = waypointDao,
-            photoRecordDao = photoRecordDao
+            photoRecordDao = photoRecordDao,
+            stampSettingsManager = stampSettingsManager
         )
     }
 
@@ -238,5 +252,25 @@ class CameraStampViewModelTest {
         assertEquals("Camera hardware error", viewModel.uiState.value.errorMessage)
         assertEquals(false, viewModel.uiState.value.isSavingPhoto)
         coVerify(exactly = 0) { waypointDao.insert(any()) }
+    }
+
+    @Test
+    fun watermarkConfigUpdatesPersistAndReflectInUiState() = runTest(testDispatcher) {
+        val newConfig = WatermarkConfig(
+            position = WatermarkPosition.TOP_LEFT,
+            showAltitude = false,
+            showUtm = false
+        )
+        viewModel.updateWatermarkConfig(newConfig)
+
+        assertEquals(WatermarkPosition.TOP_LEFT, viewModel.uiState.value.watermarkConfig.position)
+        assertFalse(viewModel.uiState.value.watermarkConfig.showAltitude)
+        verify { stampSettingsManager.saveConfig(newConfig) }
+
+        viewModel.openStampSettings()
+        assertTrue(viewModel.uiState.value.showStampSettings)
+
+        viewModel.dismissStampSettings()
+        assertFalse(viewModel.uiState.value.showStampSettings)
     }
 }

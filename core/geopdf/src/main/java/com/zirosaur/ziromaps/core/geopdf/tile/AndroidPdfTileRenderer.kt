@@ -68,6 +68,94 @@ class AndroidPdfTileRenderer @Inject constructor(
         return@withContext renderedBitmap
     }
 
+    override suspend fun renderThumbnail(
+        pdfFile: File,
+        mapId: String,
+        targetWidth: Int,
+        targetHeight: Int,
+        pageIndex: Int
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        if (!pdfFile.exists()) return@withContext null
+        val cacheKey = "thumb_${mapId}_${targetWidth}x${targetHeight}_p$pageIndex"
+
+        val memBitmap = memoryCache.get(cacheKey)
+        if (memBitmap != null && !memBitmap.isRecycled) {
+            return@withContext memBitmap
+        }
+
+        val thumbnail = renderMutex.withLock {
+            val cachedAgain = memoryCache.get(cacheKey)
+            if (cachedAgain != null && !cachedAgain.isRecycled) {
+                return@withLock cachedAgain
+            }
+            renderThumbnailInternal(pdfFile, targetWidth, targetHeight, pageIndex)
+        } ?: return@withContext null
+
+        memoryCache.put(cacheKey, thumbnail)
+        return@withContext thumbnail
+    }
+
+    private fun renderThumbnailInternal(
+        pdfFile: File,
+        targetWidth: Int,
+        targetHeight: Int,
+        pageIndex: Int
+    ): Bitmap? {
+        // Try native PdfRenderer first
+        val nativeThumb = try {
+            val pfd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            pfd?.use { descriptor ->
+                PdfRenderer(descriptor).use { renderer ->
+                    if (pageIndex < 0 || pageIndex >= renderer.pageCount) return@use null
+                    renderer.openPage(pageIndex).use { page ->
+                        val scale = minOf(
+                            targetWidth.toFloat() / page.width,
+                            targetHeight.toFloat() / page.height
+                        ).coerceAtLeast(0.01f)
+                        val outW = (page.width * scale).toInt().coerceAtLeast(1)
+                        val outH = (page.height * scale).toInt().coerceAtLeast(1)
+                        val bitmap = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+                        bitmap.eraseColor(Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bitmap
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            null
+        }
+
+        if (nativeThumb != null) return nativeThumb
+
+        // Fallback to PdfBox
+        return try {
+            if (!PDFBoxResourceLoader.isReady()) {
+                PDFBoxResourceLoader.init(context)
+            }
+            PDDocument.load(pdfFile).use { doc ->
+                if (pageIndex < 0 || pageIndex >= doc.numberOfPages) return null
+                val page = doc.getPage(pageIndex)
+                val cropBox = page.cropBox ?: page.mediaBox
+                val pw = cropBox?.width ?: 1f
+                val ph = cropBox?.height ?: 1f
+                val scale = minOf(
+                    targetWidth.toFloat() / pw,
+                    targetHeight.toFloat() / ph
+                ).coerceAtLeast(0.01f)
+                val outW = (pw * scale).toInt().coerceAtLeast(1)
+                val outH = (ph * scale).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(Color.WHITE)
+                val canvas = Canvas(bitmap)
+                val renderer = PDFRenderer(doc)
+                renderer.renderPageToGraphics(pageIndex, Paint(), canvas, scale, scale)
+                bitmap
+            }
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
     private fun renderTileInternal(
         pdfFile: File,
         tile: MapTile,

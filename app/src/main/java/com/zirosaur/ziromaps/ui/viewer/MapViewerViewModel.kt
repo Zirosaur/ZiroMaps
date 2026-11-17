@@ -28,6 +28,7 @@ import com.zirosaur.ziromaps.service.TrackRecordingManager
 import com.zirosaur.ziromaps.service.TrackRecordingService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -165,6 +166,12 @@ class MapViewerViewModel @Inject constructor(
                 _uiState.update { it.copy(recordedDistanceM = distance) }
             }
             .launchIn(viewModelScope)
+
+        trackRecordingManager.startTimeEpochMs
+            .onEach { startMs ->
+                _uiState.update { it.copy(trackRecordingStartTime = startMs) }
+            }
+            .launchIn(viewModelScope)
     }
 
     fun startLocationUpdates() {
@@ -202,7 +209,14 @@ class MapViewerViewModel @Inject constructor(
     private fun observeCompass() {
         compassProvider.getCompassUpdates()
             .onEach { compass ->
-                _uiState.update { it.copy(currentCompass = compass) }
+                _uiState.update { current ->
+                    val newRotation = if (current.followMode == GpsFollowMode.HEADING) {
+                        -compass.azimuthDeg
+                    } else {
+                        current.mapRotationDeg
+                    }
+                    current.copy(currentCompass = compass, mapRotationDeg = newRotation)
+                }
             }
             .catch { /* Compass fallback silent */ }
             .launchIn(viewModelScope)
@@ -210,6 +224,64 @@ class MapViewerViewModel @Inject constructor(
 
     fun toggleCoordinateFormat() {
         _uiState.update { it.copy(coordinateFormat = it.coordinateFormat.next()) }
+    }
+
+    fun cycleFollowMode() {
+        val next = _uiState.value.followMode.next()
+        val loc = _uiState.value.currentLocation
+        if ((next == GpsFollowMode.FOLLOW_LOCATION || next == GpsFollowMode.HEADING) && loc == null) {
+            _uiState.update { it.copy(userNotice = "Menunggu sinyal GPS fix…", followMode = GpsFollowMode.FREE) }
+            return
+        }
+        val rot = if (next == GpsFollowMode.HEADING) {
+            -(_uiState.value.currentCompass?.azimuthDeg ?: 0f)
+        } else 0f
+
+        _uiState.update {
+            it.copy(
+                followMode = next,
+                mapRotationDeg = rot,
+                centerGpsTrigger = if (next != GpsFollowMode.FREE) System.currentTimeMillis() else it.centerGpsTrigger
+            )
+        }
+    }
+
+    fun resetNorth() {
+        _uiState.update {
+            it.copy(
+                mapRotationDeg = 0f,
+                followMode = if (it.followMode == GpsFollowMode.HEADING) GpsFollowMode.FOLLOW_LOCATION else it.followMode
+            )
+        }
+    }
+
+    fun onUserPan() {
+        if (_uiState.value.followMode != GpsFollowMode.FREE) {
+            _uiState.update { it.copy(followMode = GpsFollowMode.FREE) }
+        }
+    }
+
+    fun updateMetersPerPixel(mpp: Double) {
+        _uiState.update { it.copy(metersPerPixel = mpp) }
+    }
+
+    fun openLayersSheet() {
+        _uiState.update { it.copy(showLayersSheet = true) }
+    }
+
+    fun dismissLayersSheet() {
+        _uiState.update { it.copy(showLayersSheet = false) }
+    }
+
+    fun panToPoint(latLon: LatLon) {
+        _uiState.update { it.copy(panToLatLon = latLon, followMode = GpsFollowMode.FREE) }
+    }
+
+    fun deleteTrack(trackId: String) {
+        viewModelScope.launch {
+            trackDao.deleteTrackById(trackId)
+            _uiState.update { it.copy(userNotice = "Track telah dihapus.") }
+        }
     }
 
     fun centerOnGps() {
@@ -222,7 +294,7 @@ class MapViewerViewModel @Inject constructor(
             _uiState.update { it.copy(userNotice = "Posisi GPS berada di luar area peta ini.") }
             return
         }
-        _uiState.update { it.copy(centerGpsTrigger = System.currentTimeMillis()) }
+        _uiState.update { it.copy(centerGpsTrigger = System.currentTimeMillis(), followMode = GpsFollowMode.FOLLOW_LOCATION) }
     }
 
     fun onLocationPermissionResult(granted: Boolean) {
@@ -233,7 +305,8 @@ class MapViewerViewModel @Inject constructor(
     }
 
     fun updateMapCenter(center: LatLon?) {
-        _uiState.update { it.copy(mapCenterLatLon = center) }
+        val utm = if (center != null) UtmConverter.latLonToUtm(center.latitude, center.longitude) else null
+        _uiState.update { it.copy(mapCenterLatLon = center, crosshairUtm = utm) }
     }
 
     fun openAddWaypointDialog() {

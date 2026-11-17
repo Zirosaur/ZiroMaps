@@ -24,12 +24,16 @@ class TrackRecordingManager @Inject constructor() {
     private val _recordedPointsCount = MutableStateFlow(0)
     val recordedPointsCount: StateFlow<Int> = _recordedPointsCount.asStateFlow()
 
+    private val _startTimeEpochMs = MutableStateFlow<Long?>(null)
+    val startTimeEpochMs: StateFlow<Long?> = _startTimeEpochMs.asStateFlow()
+
     fun onTrackStarted(trackId: String, projectId: String) {
         _isRecording.value = true
         _activeTrackId.value = trackId
         _activeProjectId.value = projectId
         _recordedDistanceM.value = 0.0
         _recordedPointsCount.value = 0
+        _startTimeEpochMs.value = System.currentTimeMillis()
     }
 
     fun onPointRecorded(distanceM: Double, pointsCount: Int) {
@@ -43,5 +47,6 @@ class TrackRecordingManager @Inject constructor() {
         _activeProjectId.value = null
         _recordedDistanceM.value = 0.0
         _recordedPointsCount.value = 0
+        _startTimeEpochMs.value = null
     }
 }

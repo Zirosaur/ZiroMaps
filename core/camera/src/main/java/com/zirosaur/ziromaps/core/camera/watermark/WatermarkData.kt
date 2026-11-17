@@ -12,7 +12,8 @@ data class WatermarkData(
     val timestampEpochMs: Long = System.currentTimeMillis(),
     val timeZone: TimeZone = TimeZone.getDefault(),
     val mapProjectName: String? = null,
-    val note: String? = null
+    val note: String? = null,
+    val config: WatermarkConfig = WatermarkConfig()
 ) {
     val isGpsFixed: Boolean
         get() = latitude != null && longitude != null

@@ -50,6 +50,12 @@ class CameraXManagerImpl @Inject constructor(
     private val _zoomRatio = MutableStateFlow(1f)
     override val zoomRatio: StateFlow<Float> = _zoomRatio.asStateFlow()
 
+    private val _minZoomRatio = MutableStateFlow(1f)
+    override val minZoomRatio: StateFlow<Float> = _minZoomRatio.asStateFlow()
+
+    private val _maxZoomRatio = MutableStateFlow(8f)
+    override val maxZoomRatio: StateFlow<Float> = _maxZoomRatio.asStateFlow()
+
     override val orientation: StateFlow<DeviceOrientation> = orientationListener.orientation
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -128,6 +134,13 @@ class CameraXManagerImpl @Inject constructor(
                 newImageCapture
             )
             this.camera = boundCamera
+            boundCamera.cameraInfo.zoomState.observe(lifecycleOwner) { zs ->
+                if (zs != null) {
+                    _zoomRatio.value = zs.zoomRatio
+                    _minZoomRatio.value = zs.minZoomRatio
+                    _maxZoomRatio.value = zs.maxZoomRatio
+                }
+            }
             _cameraState.value = CameraState.Ready
         } catch (e: Exception) {
             _cameraState.value = CameraState.Error("Gagal mengaitkan lifecycle kamera: ${e.message}", e)

@@ -175,4 +175,13 @@ class PdfTileRendererTest {
         diskCache.remove(tile)
         assertNull(diskCache.get(tile))
     }
+
+    @Test
+    fun renderThumbnail_rendersValidBitmap() = runBlocking {
+        val pdfFile = getSamplePdfFile()
+        val thumb = tileRenderer.renderThumbnail(pdfFile, "map_thumb_test", targetWidth = 120, targetHeight = 120)
+        assertNotNull(thumb)
+        assertTrue(thumb!!.width > 0)
+        assertTrue(thumb.height > 0)
+    }
 }

@@ -29,6 +29,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zirosaur.ziromaps.R
+import com.zirosaur.ziromaps.core.geopdf.model.LatLon
 import com.zirosaur.ziromaps.core.location.converter.CoordinateFormatter
 import com.zirosaur.ziromaps.core.location.model.CompassData
 import com.zirosaur.ziromaps.core.location.model.UserLocation
@@ -39,6 +40,8 @@ import com.zirosaur.ziromaps.ui.viewer.CoordinateFormat
 fun CoordinateStatusBar(
     location: UserLocation?,
     utm: UtmCoordinate?,
+    crosshairLatLon: LatLon? = null,
+    crosshairUtm: UtmCoordinate? = null,
     compass: CompassData?,
     format: CoordinateFormat,
     isInsideBounds: Boolean,
@@ -59,31 +62,31 @@ fun CoordinateStatusBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Coordinate display on the left
             Column(modifier = Modifier.weight(1f)) {
-                if (location != null) {
+                // Determine active coordinate: prefer crosshair if available and outside follow mode, else GPS
+                val activeLat = crosshairLatLon?.latitude ?: location?.latitude
+                val activeLon = crosshairLatLon?.longitude ?: location?.longitude
+                val activeUtm = crosshairUtm ?: utm
+
+                if (activeLat != null && activeLon != null) {
                     val coordText = when (format) {
-                        CoordinateFormat.UTM -> utm?.toFormattedString()
-                            ?: CoordinateFormatter.toDecimalString(location.latitude, location.longitude)
-                        CoordinateFormat.DECIMAL -> CoordinateFormatter.toDecimalString(
-                            location.latitude,
-                            location.longitude
-                        )
-                        CoordinateFormat.DMS -> CoordinateFormatter.toDmsString(
-                            location.latitude,
-                            location.longitude
-                        )
+                        CoordinateFormat.UTM -> activeUtm?.toFormattedString()
+                            ?: CoordinateFormatter.toUtmString(activeLat, activeLon)
+                        CoordinateFormat.DECIMAL -> CoordinateFormatter.toDecimalString(activeLat, activeLon)
+                        CoordinateFormat.DMS -> CoordinateFormatter.toDmsString(activeLat, activeLon)
                     }
 
                     Text(
                         text = coordText,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
                     )
 
                     Row(
@@ -95,11 +98,21 @@ fun CoordinateStatusBar(
                             CoordinateFormat.DECIMAL -> "WGS84 Decimal"
                             CoordinateFormat.DMS -> "WGS84 DMS"
                         }
+                        val sourceTag = if (crosshairLatLon != null) "Kursor" else "GPS"
                         Text(
-                            text = "$formatTag • Tap untuk ganti",
+                            text = "$formatTag • $sourceTag",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
+
+                        val alt = location?.altitudeM
+                        if (alt != null) {
+                            Text(
+                                text = " • Alt: ${alt.toInt()}m",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -119,7 +132,7 @@ fun CoordinateStatusBar(
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             // Accuracy badge & Compass on the right
             Column(horizontalAlignment = Alignment.End) {
@@ -137,16 +150,16 @@ fun CoordinateStatusBar(
                                 color = accuracyColor.copy(alpha = 0.15f),
                                 shape = RoundedCornerShape(6.dp)
                             )
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_my_location),
                                 contentDescription = null,
                                 tint = accuracyColor,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(11.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = stringResource(id = R.string.gps_accuracy_format, accuracy),
                                 style = MaterialTheme.typography.labelSmall,
@@ -160,15 +173,15 @@ fun CoordinateStatusBar(
                     compass?.let { cmp ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 4.dp)
+                            modifier = Modifier.padding(top = 2.dp)
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_compass),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(11.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = "${cmp.azimuthDeg.toInt()}° ${cmp.cardinalDirection}",
                                 style = MaterialTheme.typography.labelSmall,
@@ -183,7 +196,7 @@ fun CoordinateStatusBar(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(6.dp)
                             )
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = "No GPS",

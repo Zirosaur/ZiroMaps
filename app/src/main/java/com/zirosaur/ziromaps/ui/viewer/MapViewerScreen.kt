@@ -33,8 +33,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,10 +48,14 @@ import com.zirosaur.ziromaps.R
 import com.zirosaur.ziromaps.ui.viewer.components.AddWaypointDialog
 import com.zirosaur.ziromaps.ui.viewer.components.CoordinateStatusBar
 import com.zirosaur.ziromaps.ui.viewer.components.ExportDialog
+import com.zirosaur.ziromaps.ui.viewer.components.FloatingCompass
+import com.zirosaur.ziromaps.ui.viewer.components.LayersBottomSheet
 import com.zirosaur.ziromaps.ui.viewer.components.MapCanvas
+import com.zirosaur.ziromaps.ui.viewer.components.MapCrosshair
+import com.zirosaur.ziromaps.ui.viewer.components.MapScaleBar
 import com.zirosaur.ziromaps.ui.viewer.components.MapViewerBottomBar
 import com.zirosaur.ziromaps.ui.viewer.components.WaypointDetailSheet
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @Composable
 fun MapViewerScreen(
@@ -64,7 +68,18 @@ fun MapViewerScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
+
+    val liveTrackDurationSec by produceState(initialValue = 0L, key1 = uiState.isRecordingTrack) {
+        if (uiState.isRecordingTrack) {
+            val startMs = uiState.trackRecordingStartTime ?: System.currentTimeMillis()
+            while (true) {
+                value = ((System.currentTimeMillis() - startMs) / 1000L).coerceAtLeast(0L)
+                delay(1000L)
+            }
+        } else {
+            value = 0L
+        }
+    }
 
     LaunchedEffect(projectId) {
         if (projectId.isNotBlank()) {
@@ -124,7 +139,7 @@ fun MapViewerScreen(
             val project = uiState.mapProject
 
             if (project != null) {
-                // Interactive Tiled Map Canvas
+                // 1. Full-Bleed Interactive Tiled Map Canvas
                 MapCanvas(
                     mapId = project.id,
                     pageWidthPt = project.pageWidthPt,
@@ -133,88 +148,144 @@ fun MapViewerScreen(
                     userPagePoint = uiState.userPagePoint,
                     userAccuracyM = uiState.currentLocation?.accuracyM,
                     userAzimuthDeg = uiState.currentCompass?.azimuthDeg,
+                    followMode = uiState.followMode,
+                    rotationDeg = uiState.mapRotationDeg,
+                    panToLatLon = uiState.panToLatLon,
                     centerGpsTrigger = uiState.centerGpsTrigger,
                     waypoints = uiState.waypoints,
                     tracks = uiState.tracks,
                     onWaypointClick = { waypoint -> viewModel.selectWaypoint(waypoint) },
                     onMapCenterChanged = { centerLatLon -> viewModel.updateMapCenter(centerLatLon) },
+                    onMetersPerPixelChanged = { mpp -> viewModel.updateMetersPerPixel(mpp) },
+                    onUserPan = { viewModel.onUserPan() },
                     loadTileBitmap = { tile -> viewModel.renderTile(tile) },
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Top Bar Overlay: Back button + Live Coordinate Status Bar
-                Row(
+                // 2. High-Contrast Center Targeting Crosshair
+                MapCrosshair(modifier = Modifier.fillMaxSize())
+
+                // 3. Top Floating Overlays
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(top = 16.dp, start = 12.dp, end = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(top = 12.dp, start = 12.dp, end = 12.dp)
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier.size(44.dp)
+                    // Top Bar: Back button + Live Coordinate Status Bar + Export button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = onNavigateBack,
-                            modifier = Modifier.fillMaxSize()
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier.size(44.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Kembali ke Perpustakaan",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                            IconButton(
+                                onClick = onNavigateBack,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Kembali ke Perpustakaan",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        CoordinateStatusBar(
+                            location = uiState.currentLocation,
+                            utm = uiState.currentUtm,
+                            crosshairLatLon = uiState.mapCenterLatLon,
+                            crosshairUtm = uiState.crosshairUtm,
+                            compass = uiState.currentCompass,
+                            format = uiState.coordinateFormat,
+                            isInsideBounds = uiState.isGpsInsideBounds,
+                            onToggleFormat = { viewModel.toggleCoordinateFormat() },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            IconButton(
+                                onClick = { viewModel.openExportDialog() },
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_share),
+                                    contentDescription = stringResource(id = R.string.export_button_desc),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    CoordinateStatusBar(
-                        location = uiState.currentLocation,
-                        utm = uiState.currentUtm,
-                        compass = uiState.currentCompass,
-                        format = uiState.coordinateFormat,
-                        isInsideBounds = uiState.isGpsInsideBounds,
-                        onToggleFormat = { viewModel.toggleCoordinateFormat() },
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier.size(44.dp)
+                    // Secondary row: Floating Compass (tap to reset North) & Dynamic Scale Bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = { viewModel.openExportDialog() },
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_share),
-                                contentDescription = stringResource(id = R.string.export_button_desc),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        FloatingCompass(
+                            rotationDeg = uiState.mapRotationDeg,
+                            onResetNorth = { viewModel.resetNorth() }
+                        )
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        MapScaleBar(metersPerPixel = uiState.metersPerPixel)
                     }
                 }
 
-                // Bottom Action Buttons Overlay
+                // 4. Ergonomic Bottom Action Bar
                 MapViewerBottomBar(
+                    followMode = uiState.followMode,
                     isRecordingTrack = uiState.isRecordingTrack,
                     recordedDistanceM = uiState.recordedDistanceM,
-                    onCenterGpsClick = { viewModel.centerOnGps() },
+                    recordingDurationSec = liveTrackDurationSec,
+                    onCycleFollowMode = { viewModel.cycleFollowMode() },
                     onAddPinClick = { viewModel.openAddWaypointDialog() },
                     onRecordTrackClick = { viewModel.toggleTrackRecording(context) },
+                    onLayersClick = { viewModel.openLayersSheet() },
                     onCameraStampClick = { onOpenCameraStamp(projectId) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                 )
 
-                // Add Waypoint Dialog
+                // 5. Layers Bottom Sheet (Pins & Tracks list)
+                if (uiState.showLayersSheet) {
+                    LayersBottomSheet(
+                        waypoints = uiState.waypoints,
+                        tracks = uiState.tracks,
+                        onSelectWaypoint = { wp ->
+                            viewModel.panToPoint(com.zirosaur.ziromaps.core.geopdf.model.LatLon(wp.waypoint.latitude, wp.waypoint.longitude))
+                            viewModel.selectWaypoint(wp)
+                        },
+                        onDeleteWaypoint = { wpId -> viewModel.deleteWaypoint(wpId) },
+                        onSelectTrack = { trk ->
+                            val firstPt = trk.points.firstOrNull()
+                            if (firstPt != null) {
+                                viewModel.panToPoint(com.zirosaur.ziromaps.core.geopdf.model.LatLon(firstPt.latitude, firstPt.longitude))
+                            }
+                        },
+                        onDeleteTrack = { trackId -> viewModel.deleteTrack(trackId) },
+                        onDismiss = { viewModel.dismissLayersSheet() }
+                    )
+                }
+
+                // 6. Add Waypoint Dialog (supports crosshair or GPS)
                 if (uiState.showAddWaypointDialog) {
                     val defaultTitle = "WP-${String.format(java.util.Locale.US, "%03d", uiState.waypoints.size + 1)}"
                     AddWaypointDialog(
@@ -228,7 +299,7 @@ fun MapViewerScreen(
                     )
                 }
 
-                // Waypoint Detail Bottom Sheet
+                // 7. Waypoint Detail Bottom Sheet
                 uiState.selectedWaypoint?.let { selected ->
                     WaypointDetailSheet(
                         waypointWithPhotos = selected,
@@ -242,7 +313,7 @@ fun MapViewerScreen(
                     )
                 }
 
-                // Export Dialog
+                // 8. Export Dialog
                 if (uiState.showExportDialog) {
                     ExportDialog(
                         projectName = project.name,

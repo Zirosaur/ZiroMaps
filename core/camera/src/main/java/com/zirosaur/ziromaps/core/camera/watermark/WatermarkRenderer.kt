@@ -27,41 +27,62 @@ class CanvasWatermarkRenderer @Inject constructor() : WatermarkRenderer {
 
     override fun generateWatermarkLines(data: WatermarkData): List<String> {
         val lines = mutableListOf<String>()
+        val config = data.config
 
         // Line 1: Coordinates + Accuracy
-        val line1 = if (data.latitude != null && data.longitude != null) {
-            val latStr = String.format(Locale.US, "%.6f°", data.latitude)
-            val lonStr = String.format(Locale.US, "%.6f°", data.longitude)
-            val accStr = when {
-                data.accuracyM == null -> ""
-                data.accuracyM <= 30f -> String.format(Locale.US, " (±%.1f m)", data.accuracyM)
-                else -> String.format(Locale.US, " (±%.1f m - Akurasi Rendah)", data.accuracyM)
+        if (config.showCoordinates) {
+            val line1 = if (data.latitude != null && data.longitude != null) {
+                val latStr = String.format(Locale.US, "%.6f°", data.latitude)
+                val lonStr = String.format(Locale.US, "%.6f°", data.longitude)
+                val accStr = when {
+                    data.accuracyM == null -> ""
+                    data.accuracyM <= 30f -> String.format(Locale.US, " (±%.1f m)", data.accuracyM)
+                    else -> String.format(Locale.US, " (±%.1f m - Akurasi Rendah)", data.accuracyM)
+                }
+                "Lat: $latStr  Lon: $lonStr$accStr"
+            } else {
+                "Lat: -  Lon: - (Mencari GPS)"
             }
-            "Lat: $latStr  Lon: $lonStr$accStr"
-        } else {
-            "Lat: -  Lon: - (Mencari GPS)"
+            lines.add(line1)
         }
-        lines.add(line1)
 
-        // Line 2: UTM + Azimuth
-        val utmStr = data.utmCoordinate?.ifBlank { null } ?: "-"
-        val azimuthStr = CompassDirection.formatAzimuth(data.azimuthDeg)
-        lines.add("UTM: $utmStr  |  Azimuth: $azimuthStr")
+        // Line 2: UTM + Altitude + Azimuth
+        val parts = mutableListOf<String>()
+        if (config.showUtm) {
+            val utmStr = data.utmCoordinate?.ifBlank { null } ?: "-"
+            parts.add("UTM: $utmStr")
+        }
+        if (config.showAltitude && data.altitudeM != null) {
+            parts.add(String.format(Locale.US, "Alt: %.0f m", data.altitudeM))
+        }
+        if (config.showAzimuth) {
+            val azimuthStr = CompassDirection.formatAzimuth(data.azimuthDeg)
+            parts.add("Azimuth: $azimuthStr")
+        }
+        if (parts.isNotEmpty()) {
+            lines.add(parts.joinToString("  |  "))
+        }
 
         // Line 3: Time
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.getDefault()).apply {
-            timeZone = data.timeZone
+        if (config.showTimestamp) {
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.getDefault()).apply {
+                timeZone = data.timeZone
+            }
+            val formattedTime = dateFormat.format(Date(data.timestampEpochMs))
+            lines.add("Waktu: $formattedTime")
         }
-        val formattedTime = dateFormat.format(Date(data.timestampEpochMs))
-        lines.add("Waktu: $formattedTime")
 
         // Line 4: Map Project Name & Note (Optional)
-        val project = data.mapProjectName?.trim()?.ifBlank { null }
-        val note = data.note?.trim()?.ifBlank { null }
+        val project = if (config.showMapName) data.mapProjectName?.trim()?.ifBlank { null } else null
+        val note = if (config.showNote) data.note?.trim()?.ifBlank { null } else null
         when {
             project != null && note != null -> lines.add("Peta: $project | $note")
             project != null -> lines.add("Peta: $project")
             note != null -> lines.add("Catatan: $note")
+        }
+
+        if (lines.isEmpty()) {
+            lines.add("Ziro Maps Geotag")
         }
 
         return lines
@@ -82,7 +103,7 @@ class CanvasWatermarkRenderer @Inject constructor() : WatermarkRenderer {
         val minDim = minOf(targetBitmap.width, targetBitmap.height)
         val scale = (minDim / 1080f).coerceAtLeast(0.5f)
 
-        val textSize = 22f * scale
+        val textSize = 22f * scale * data.config.textSize.scaleFactor
         val paddingX = 16f * scale
         val paddingY = 14f * scale
         val margin = 24f * scale
@@ -110,10 +131,13 @@ class CanvasWatermarkRenderer @Inject constructor() : WatermarkRenderer {
         val bgWidth = maxTextWidth + 2 * paddingX
         val bgHeight = totalTextHeight + 2 * paddingY
 
-        val bgLeft = margin
-        val bgBottom = targetBitmap.height - margin
-        val bgTop = bgBottom - bgHeight
+        val (bgLeft, bgTop) = when (data.config.position) {
+            WatermarkPosition.BOTTOM_LEFT -> Pair(margin, targetBitmap.height - margin - bgHeight)
+            WatermarkPosition.BOTTOM_RIGHT -> Pair(targetBitmap.width - margin - bgWidth, targetBitmap.height - margin - bgHeight)
+            WatermarkPosition.TOP_LEFT -> Pair(margin, margin)
+        }
         val bgRight = bgLeft + bgWidth
+        val bgBottom = bgTop + bgHeight
 
         val bgRect = RectF(bgLeft, bgTop, bgRight, bgBottom)
         canvas.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)

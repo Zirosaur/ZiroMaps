@@ -14,6 +14,8 @@ interface CameraXManager {
     val flashMode: StateFlow<FlashMode>
     val lensFacing: StateFlow<LensFacing>
     val zoomRatio: StateFlow<Float>
+    val minZoomRatio: StateFlow<Float>
+    val maxZoomRatio: StateFlow<Float>
     val orientation: StateFlow<DeviceOrientation>
 
     fun bindToLifecycle(

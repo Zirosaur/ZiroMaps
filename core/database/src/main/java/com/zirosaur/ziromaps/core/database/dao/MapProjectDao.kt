@@ -43,10 +43,12 @@ interface MapProjectDao {
         SELECT 
             p.*,
             COUNT(DISTINCT w.id) AS waypointCount,
-            COUNT(DISTINCT ph.id) AS photoCount
+            COUNT(DISTINCT ph.id) AS photoCount,
+            COUNT(DISTINCT t.id) AS trackCount
         FROM map_projects p
         LEFT JOIN waypoints w ON w.projectId = p.id
         LEFT JOIN photo_records ph ON ph.waypointId = w.id
+        LEFT JOIN tracks t ON t.projectId = p.id
         GROUP BY p.id
         ORDER BY p.createdAtEpochMs DESC
     """)

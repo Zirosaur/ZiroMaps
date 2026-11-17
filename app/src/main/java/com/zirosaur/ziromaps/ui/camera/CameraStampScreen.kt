@@ -3,11 +3,14 @@ package com.zirosaur.ziromaps.ui.camera
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,13 +34,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -48,13 +50,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -69,7 +74,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zirosaur.ziromaps.R
 import com.zirosaur.ziromaps.core.camera.model.FlashMode
+import com.zirosaur.ziromaps.core.camera.watermark.WatermarkPosition
 import com.zirosaur.ziromaps.ui.camera.components.LiveWatermarkOverlay
+import com.zirosaur.ziromaps.ui.camera.components.StampSettingsSheet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @Composable
 fun CameraStampScreen(
@@ -85,6 +95,24 @@ fun CameraStampScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
+
+    // Asynchronously load thumbnail of last photo
+    val lastPhotoBitmap by produceState<Bitmap?>(initialValue = null, key1 = uiState.lastCapturedPhotoPath) {
+        val path = uiState.lastCapturedPhotoPath
+        if (path != null) {
+            val file = File(path)
+            if (file.exists()) {
+                value = withContext(Dispatchers.IO) {
+                    try {
+                        val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+                        BitmapFactory.decodeFile(file.absolutePath, opts)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            }
+        }
+    }
 
     LaunchedEffect(projectId) {
         if (projectId.isNotBlank()) {
@@ -144,7 +172,7 @@ fun CameraStampScreen(
                 .background(Color.Black)
         ) {
             if (uiState.cameraPermissionGranted) {
-                // Camera Preview View
+                // 1. Camera Preview Viewfinder
                 AndroidView(
                     factory = { ctx ->
                         PreviewView(ctx).apply {
@@ -165,7 +193,7 @@ fun CameraStampScreen(
                         }
                 )
 
-                // Top Controls Overlay
+                // 2. Top Controls Bar: Back, GPS Status, Flash, Settings, Flip Camera
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -193,11 +221,11 @@ fun CameraStampScreen(
                     val (badgeText, badgeColor) = when {
                         !uiState.isGpsFixed -> Pair("Mencari GPS…", Color(0xFFFFB300))
                         !uiState.isHighAccuracy -> Pair(
-                            "Akurasi: ±${uiState.currentLocation?.accuracyM?.toInt()}m (Rendah)",
+                            "±${uiState.currentLocation?.accuracyM?.toInt()}m (Rendah)",
                             Color(0xFFFF9800)
                         )
                         else -> Pair(
-                            "GPS Fix (±${uiState.currentLocation?.accuracyM?.toInt()}m)",
+                            "GPS Fix ±${uiState.currentLocation?.accuracyM?.toInt()}m",
                             Color(0xFF4CAF50)
                         )
                     }
@@ -208,7 +236,7 @@ fun CameraStampScreen(
                                 color = Color.Black.copy(alpha = 0.6f),
                                 shape = RoundedCornerShape(16.dp)
                             )
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
@@ -226,7 +254,7 @@ fun CameraStampScreen(
                         }
                     }
 
-                    // Action buttons (Flash & Flip)
+                    // Actions: Flash, Stamp Settings, Flip Camera
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Flash Toggle
                         val flashIconRes = when (uiState.flashMode) {
@@ -244,7 +272,23 @@ fun CameraStampScreen(
                                     painter = painterResource(id = flashIconRes),
                                     contentDescription = "Flash Mode",
                                     tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // Stamp Settings
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.5f),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            IconButton(onClick = { viewModel.openStampSettings() }) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Pengaturan Stamp",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -264,78 +308,170 @@ fun CameraStampScreen(
                                     painter = painterResource(id = R.drawable.ic_flip_camera),
                                     contentDescription = "Ganti Kamera",
                                     tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
                     }
                 }
 
-                // Live Watermark Preview (Bottom Left above controls)
+                // 3. Live WYSIWYG Watermark Preview (Positioned according to config)
+                val watermarkAlignment = when (uiState.watermarkConfig.position) {
+                    WatermarkPosition.BOTTOM_LEFT -> Alignment.BottomStart
+                    WatermarkPosition.BOTTOM_RIGHT -> Alignment.BottomEnd
+                    WatermarkPosition.TOP_LEFT -> Alignment.TopStart
+                }
+                val watermarkPaddingModifier = when (uiState.watermarkConfig.position) {
+                    WatermarkPosition.BOTTOM_LEFT -> Modifier
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 150.dp)
+                    WatermarkPosition.BOTTOM_RIGHT -> Modifier
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 150.dp)
+                    WatermarkPosition.TOP_LEFT -> Modifier
+                        .statusBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 76.dp)
+                }
+
                 LiveWatermarkOverlay(
                     uiState = uiState,
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .navigationBarsPadding()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 156.dp)
+                        .align(watermarkAlignment)
+                        .then(watermarkPaddingModifier)
                 )
 
-                // Bottom Controls: Quick Note & Shutter Button
-                Column(
+                // 4. Quick Zoom Selector Chips (e.g. 0.6x, 1x, 2x)
+                val zoomRatios = remember(uiState.minZoomRatio, uiState.maxZoomRatio) {
+                    val list = mutableListOf<Float>()
+                    if (uiState.minZoomRatio <= 0.65f) list.add(0.6f)
+                    list.add(1.0f)
+                    if (uiState.maxZoomRatio >= 2.0f) list.add(2.0f)
+                    if (uiState.maxZoomRatio >= 5.0f) list.add(5.0f)
+                    list
+                }
+
+                Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.65f))
                         .navigationBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(bottom = 104.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Quick Note Input
-                    OutlinedTextField(
-                        value = uiState.quickNote,
-                        onValueChange = { viewModel.updateQuickNote(it) },
-                        placeholder = {
+                    zoomRatios.forEach { ratio ->
+                        val isSelected = kotlin.math.abs(uiState.zoomRatio - ratio) < 0.15f
+                        val bg = if (isSelected) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.55f)
+                        val textCol = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.White
+
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(bg)
+                                .clickable { viewModel.setZoomRatio(ratio) }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = stringResource(id = R.string.quick_note_placeholder),
-                                color = Color.White.copy(alpha = 0.6f),
-                                fontSize = 12.sp
-                            )
-                        },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.4f),
-                            focusedContainerColor = Color.Black.copy(alpha = 0.3f),
-                            unfocusedContainerColor = Color.Black.copy(alpha = 0.3f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Shutter Button
-                    Box(
-                        modifier = Modifier
-                            .size(74.dp)
-                            .border(3.dp, Color.White, CircleShape)
-                            .padding(5.dp)
-                            .clip(CircleShape)
-                            .background(if (uiState.isSavingPhoto) Color.Gray else Color.White)
-                            .clickable(enabled = !uiState.isSavingPhoto) {
-                                viewModel.takePhoto(context)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (uiState.isSavingPhoto) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(36.dp),
-                                strokeWidth = 3.dp
+                                text = if (ratio % 1.0f == 0f) "${ratio.toInt()}x" else "${ratio}x",
+                                color = textCol,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
+                }
+
+                // 5. Ergonomic Bottom Shutter Dock
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Left: Last Photo Thumbnail
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.DarkGray)
+                                .border(1.5.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val bmp = lastPhotoBitmap
+                            if (bmp != null) {
+                                Image(
+                                    bitmap = bmp.asImageBitmap(),
+                                    contentDescription = "Foto Terakhir",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_camera),
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        // Center: Prominent Shutter Button
+                        Box(
+                            modifier = Modifier
+                                .size(76.dp)
+                                .border(3.5.dp, Color.White, CircleShape)
+                                .padding(5.dp)
+                                .clip(CircleShape)
+                                .background(if (uiState.isSavingPhoto) Color.Gray else Color.White)
+                                .clickable(enabled = !uiState.isSavingPhoto) {
+                                    viewModel.takePhoto(context)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (uiState.isSavingPhoto) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(36.dp),
+                                    strokeWidth = 3.dp
+                                )
+                            }
+                        }
+
+                        // Right: Quick Note Pill Trigger (shows note if exists)
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.5f))
+                                .clickable { viewModel.openStampSettings() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Buka Pengaturan Stamp",
+                                tint = if (uiState.quickNote.isNotBlank()) MaterialTheme.colorScheme.primary else Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+
+                // 6. Stamp Settings Bottom Sheet
+                if (uiState.showStampSettings) {
+                    StampSettingsSheet(
+                        config = uiState.watermarkConfig,
+                        quickNote = uiState.quickNote,
+                        onQuickNoteChange = { viewModel.updateQuickNote(it) },
+                        onConfigChange = { viewModel.updateWatermarkConfig(it) },
+                        onDismiss = { viewModel.dismissStampSettings() }
+                    )
                 }
             } else {
                 // Permission Denied View

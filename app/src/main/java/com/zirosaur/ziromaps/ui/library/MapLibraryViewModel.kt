@@ -1,8 +1,10 @@
 package com.zirosaur.ziromaps.ui.library
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zirosaur.ziromaps.core.geopdf.tile.PdfTileRenderer
 import com.zirosaur.ziromaps.data.repository.MapRepository
 import com.zirosaur.ziromaps.domain.NotGeoPdfException
 import com.zirosaur.ziromaps.model.MapProjectItem
@@ -15,11 +17,13 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class MapLibraryViewModel @Inject constructor(
-    private val mapRepository: MapRepository
+    private val mapRepository: MapRepository,
+    private val pdfTileRenderer: PdfTileRenderer
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapLibraryUiState(isLoading = true))
@@ -98,6 +102,15 @@ class MapLibraryViewModel @Inject constructor(
 
     fun confirmDeleteMap(item: MapProjectItem) {
         _uiState.update { it.copy(deleteConfirmationProject = item) }
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    suspend fun loadThumbnail(project: MapProjectItem): Bitmap? {
+        val file = File(project.pdfLocalPath)
+        return pdfTileRenderer.renderThumbnail(file, project.id, targetWidth = 240, targetHeight = 240)
     }
 
     fun dismissDeleteConfirmation() {

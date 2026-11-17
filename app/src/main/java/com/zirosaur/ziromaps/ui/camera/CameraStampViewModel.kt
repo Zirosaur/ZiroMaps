@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zirosaur.ziromaps.core.camera.CameraXManager
 import com.zirosaur.ziromaps.core.camera.watermark.PhotoProcessor
+import com.zirosaur.ziromaps.core.camera.watermark.WatermarkConfig
 import com.zirosaur.ziromaps.core.camera.watermark.WatermarkData
 import com.zirosaur.ziromaps.core.database.dao.MapProjectDao
 import com.zirosaur.ziromaps.core.database.dao.PhotoRecordDao
@@ -16,6 +17,7 @@ import com.zirosaur.ziromaps.core.database.entity.WaypointEntity
 import com.zirosaur.ziromaps.core.location.converter.UtmConverter
 import com.zirosaur.ziromaps.core.location.provider.CompassProvider
 import com.zirosaur.ziromaps.core.location.provider.LocationProvider
+import com.zirosaur.ziromaps.data.preferences.StampSettingsManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,13 +38,24 @@ class CameraStampViewModel @Inject constructor(
     private val compassProvider: CompassProvider,
     private val mapProjectDao: MapProjectDao,
     private val waypointDao: WaypointDao,
-    private val photoRecordDao: PhotoRecordDao
+    private val photoRecordDao: PhotoRecordDao,
+    private val stampSettingsManager: StampSettingsManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CameraStampUiState())
     val uiState: StateFlow<CameraStampUiState> = _uiState.asStateFlow()
 
     init {
+        // Load persisted settings
+        val persistedConfig = stampSettingsManager.loadConfig()
+        val lastPhoto = stampSettingsManager.getLastPhotoPath()
+        _uiState.update {
+            it.copy(
+                watermarkConfig = persistedConfig,
+                lastCapturedPhotoPath = lastPhoto
+            )
+        }
+
         observeCameraManager()
         observeLocationAndCompass()
     }
@@ -66,6 +79,16 @@ class CameraStampViewModel @Inject constructor(
         viewModelScope.launch {
             cameraXManager.zoomRatio.collect { zoom ->
                 _uiState.update { it.copy(zoomRatio = zoom) }
+            }
+        }
+        viewModelScope.launch {
+            cameraXManager.minZoomRatio.collect { minZ ->
+                _uiState.update { it.copy(minZoomRatio = minZ) }
+            }
+        }
+        viewModelScope.launch {
+            cameraXManager.maxZoomRatio.collect { maxZ ->
+                _uiState.update { it.copy(maxZoomRatio = maxZ) }
             }
         }
     }
@@ -113,6 +136,19 @@ class CameraStampViewModel @Inject constructor(
 
     fun updateQuickNote(note: String) {
         _uiState.update { it.copy(quickNote = note) }
+    }
+
+    fun updateWatermarkConfig(config: WatermarkConfig) {
+        stampSettingsManager.saveConfig(config)
+        _uiState.update { it.copy(watermarkConfig = config) }
+    }
+
+    fun openStampSettings() {
+        _uiState.update { it.copy(showStampSettings = true) }
+    }
+
+    fun dismissStampSettings() {
+        _uiState.update { it.copy(showStampSettings = false) }
     }
 
     fun bindCamera(lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
@@ -174,7 +210,8 @@ class CameraStampViewModel @Inject constructor(
                 azimuthDeg = state.currentCompass?.azimuthDeg,
                 timestampEpochMs = System.currentTimeMillis(),
                 mapProjectName = state.projectName.ifBlank { null },
-                note = state.quickNote.trim().ifBlank { null }
+                note = state.quickNote.trim().ifBlank { null },
+                config = state.watermarkConfig
             )
 
             val photosDir = File(context.filesDir, "photos/$projectId")
@@ -221,10 +258,14 @@ class CameraStampViewModel @Inject constructor(
             )
             photoRecordDao.insert(photoRecord)
 
+            // Persist last captured photo path
+            stampSettingsManager.setLastPhotoPath(photoFile.absolutePath)
+
             _uiState.update {
                 it.copy(
                     isSavingPhoto = false,
                     photoSavedWaypointId = waypointId,
+                    lastCapturedPhotoPath = photoFile.absolutePath,
                     userNotice = "Foto berhasil disimpan dan ditautkan ke peta."
                 )
             }

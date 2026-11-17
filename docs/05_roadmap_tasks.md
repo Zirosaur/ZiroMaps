@@ -31,3 +31,9 @@
 
 ## Phase 5: Local Signing & Release Hardening
 - [x] **T5.1:** Konfigurasi local release signing, proguard hardening, penanganan WindowInsets edge-to-edge, dan script build lokal (`scripts/release-local.sh`).
+
+## Phase 6: Field Ergonomics Overhaul (Avenza Maps & Timestamp Camera Standards)
+- [x] **T6.1:** Pembaruan SSOT `docs/04_ui_ux_spec.md` untuk standar ergonomi lapangan ala Avenza Maps & Timestamp Camera.
+- [x] **T6.2:** Peningkatan `MapLibraryScreen`: thumbnail halaman 1 PDF (cached), ukuran file (MB/KB), chip jumlah waypoint/track/foto, dan bar pencarian cepat.
+- [x] **T6.3:** Peningkatan `MapViewerScreen`: full-bleed canvas, crosshair tengah, floating compass (reset Utara), dynamic scale bar, 3-mode GPS follow (Free/Follow/Heading), live track recording ticker, dan Layers bottom sheet (pins & tracks).
+- [x] **T6.4:** Peningkatan `CameraStampScreen`: viewfinder ergonomis, zoom selector chips (0.6x/1x/2x), thumbnail foto terakhir, live WYSIWYG watermark preview, modal bottom sheet pengaturan stamp (toggles, posisi, ukuran teks, quick note), dan persistensi SharedPreferences lokal.
